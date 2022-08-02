@@ -121,7 +121,7 @@ used when socket.inet_pton is not available.
         # cases 0:0.
         match = max(_IP6_ZEROS.finditer(address),
                     key=lambda m: m.end(1) - m.start(1))
-        return '{}::{}'.format(address[:match.start()], address[match.end():])
+        return f'{address[:match.start()]}::{address[match.end():]}'
     except ValueError:
         return address
 

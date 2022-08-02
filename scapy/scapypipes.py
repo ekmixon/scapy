@@ -597,16 +597,12 @@ class TriggerDrain(Drain):
         self.f = f
 
     def push(self, msg):
-        # type: (str) -> None
-        v = self.f(msg)
-        if v:
+        if v := self.f(msg):
             self._trigger(v)
         self._send(msg)
 
     def high_push(self, msg):
-        # type: (str) -> None
-        v = self.f(msg)
-        if v:
+        if v := self.f(msg):
             self._trigger(v)
         self._high_send(msg)
 

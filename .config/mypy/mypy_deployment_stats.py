@@ -7,6 +7,7 @@
 Generate MyPy deployment stats
 """
 
+
 import os
 import io
 import glob
@@ -36,10 +37,7 @@ for f in ALL_FILES:
     with open(os.path.join(rootpath, f)) as fd:
         lines = len(fd.read().split("\n"))
     parts = f.split("/")
-    if len(parts) > 2:
-        mod = parts[1]
-    else:
-        mod = "[core]"
+    mod = parts[1] if len(parts) > 2 else "[core]"
     e, l = MODULES[mod]
     if f in FILES:
         e += lines
@@ -57,9 +55,8 @@ for mod, dat in MODULES.items():
     print("- `%s`: %.2f%%" % (mod, dat[0] / dat[1] * 100))
 
 print()
-COREMODS = REMAINING["[core]"]
-if COREMODS:
+if COREMODS := REMAINING["[core]"]:
     print("Core modules still untypes:")
     for mod in COREMODS:
-        print("- `%s`" % mod)
+        print(f"- `{mod}`")
 

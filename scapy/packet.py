@@ -261,9 +261,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         if Packet.class_default_fields.get(cls_name, None) is None:
             self.prepare_cached_fields(self.fields_desc)
 
-        # Use fields information from cache
-        default_fields = Packet.class_default_fields.get(cls_name, None)
-        if default_fields:
+        if default_fields := Packet.class_default_fields.get(cls_name, None):
             self.default_fields = default_fields
             self.fieldtype = Packet.class_fieldtype[cls_name]
             self.packetfields = Packet.class_packetfields[cls_name]
@@ -289,10 +287,10 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         if not flist:
             return
 
-        class_default_fields = dict()
-        class_default_fields_ref = list()
-        class_fieldtype = dict()
-        class_packetfields = list()
+        class_default_fields = {}
+        class_default_fields_ref = []
+        class_fieldtype = {}
+        class_packetfields = []
 
         # Fields initialization
         for f in flist:
@@ -341,18 +339,17 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
             return
         elif not isinstance(self.payload, NoPayload):
             self.payload.add_payload(payload)
+        elif isinstance(payload, Packet):
+            self.payload = payload
+            payload.add_underlayer(self)
+            for t in self.aliastypes:
+                if t in payload.overload_fields:
+                    self.overloaded_fields = payload.overload_fields[t]
+                    break
+        elif isinstance(payload, (bytes, str, bytearray, memoryview)):
+            self.payload = conf.raw_layer(load=bytes_encode(payload))
         else:
-            if isinstance(payload, Packet):
-                self.payload = payload
-                payload.add_underlayer(self)
-                for t in self.aliastypes:
-                    if t in payload.overload_fields:
-                        self.overloaded_fields = payload.overload_fields[t]
-                        break
-            elif isinstance(payload, (bytes, str, bytearray, memoryview)):
-                self.payload = conf.raw_layer(load=bytes_encode(payload))
-            else:
-                raise TypeError("payload must be 'Packet', 'bytes', 'str', 'bytearray', or 'memoryview', not [%s]" % repr(payload))  # noqa: E501
+            raise TypeError("payload must be 'Packet', 'bytes', 'str', 'bytearray', or 'memoryview', not [%s]" % repr(payload))  # noqa: E501
 
     def remove_payload(self):
         # type: () -> None
@@ -392,10 +389,10 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
         # type: (str) -> str
         new_attr, version = self.deprecated_fields[attr]
         warnings.warn(
-            "%s has been deprecated in favor of %s since %s !" % (
-                attr, new_attr, version
-            ), DeprecationWarning
+            f"{attr} has been deprecated in favor of {new_attr} since {version} !",
+            DeprecationWarning,
         )
+
         return new_attr
 
     def getfieldval(self, attr):
@@ -428,9 +425,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
             fld, v = self.getfield_and_val(attr)
         except ValueError:
             return self.payload.__getattr__(attr)
-        if fld is not None:
-            return fld.i2h(self, v)
-        return v
+        return fld.i2h(self, v) if fld is not None else v
 
     def setfieldval(self, attr, val):
         # type: (str, Any) -> None
@@ -438,10 +433,7 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
             attr = self._resolve_alias(attr)
         if attr in self.default_fields:
             fld = self.get_field(attr)
-            if fld is None:
-                any2i = lambda x, y: y  # type: Callable[..., Any]
-            else:
-                any2i = fld.any2i
+            any2i = (lambda x, y: y) if fld is None else fld.any2i
             self.fields[attr] = any2i(self, val)
             self.explicit = 0
             self.raw_packet_cache = None
@@ -537,15 +529,8 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
                 ncol = ct.field_name
                 vcol = ct.field_value
 
-            s += " %s%s%s" % (ncol(f.name),
-                              ct.punct("="),
-                              vcol(val))
-        return "%s%s %s %s%s%s" % (ct.punct("<"),
-                                   ct.layer_name(self.__class__.__name__),
-                                   s,
-                                   ct.punct("|"),
-                                   repr(self.payload),
-                                   ct.punct(">"))
+            s += f' {ncol(f.name)}{ct.punct("=")}{vcol(val)}'
+        return f'{ct.punct("<")}{ct.layer_name(self.__class__.__name__)} {s} {ct.punct("|")}{repr(self.payload)}{ct.punct(">")}'
 
     if six.PY2:
         def __str__(self):
@@ -641,8 +626,8 @@ class Packet(six.with_metaclass(Packet_metaclass,  # type: ignore
                     self.raw_packet_cache_fields = None
                     self.wirelen = None
                     break
-            if self.raw_packet_cache is not None:
-                return self.raw_packet_cache
+        if self.raw_packet_cache is not None:
+            return self.raw_packet_cache
         p = b""
         for f in self.fields_desc:
             val = self.getfieldval(f.name)

@@ -51,7 +51,7 @@ class AS_resolver:
     def _resolve_one(self, ip):
         self.s.send(("%s\n" % ip).encode("utf8"))
         x = b""
-        while not (b"%" in x or b"source" in x):
+        while b"%" not in x and b"source" not in x:
             x += self.s.recv(8192)
         asn, desc = self._parse_whois(x)
         return ip, asn, desc
@@ -110,7 +110,7 @@ class AS_resolver_cymru(AS_resolver):
             asn, ip, desc = [elt.strip() for elt in line.split('|')]
             if asn == "NA":
                 continue
-            asn = "AS%s" % asn
+            asn = f"AS{asn}"
             ASNlist.append((ip, asn, desc))
         return ASNlist
 

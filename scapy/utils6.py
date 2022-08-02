@@ -65,9 +65,7 @@ def construct_source_candidate_set(
         if res != 0 or y_global != 1:
             return res
         # two global addresses: if one is native, it wins.
-        if not in6_isaddr6to4(x):
-            return -1
-        return -res
+        return -res if in6_isaddr6to4(x) else -1
 
     cset = iter([])  # type: Iterator[Tuple[str, int, str]]
     if in6_isgladdr(addr) or in6_isuladdr(addr):
@@ -78,7 +76,7 @@ def construct_source_candidate_set(
         cset = (x for x in laddr if x[1] == IPV6_ADDR_SITELOCAL)
     elif in6_ismaddr(addr):
         if in6_ismnladdr(addr):
-            cset = (x for x in [('::1', 16, conf.loopback_name)])
+            cset = iter([('::1', 16, conf.loopback_name)])
         elif in6_ismgladdr(addr):
             cset = (x for x in laddr if x[1] == IPV6_ADDR_GLOBAL)
         elif in6_ismlladdr(addr):
@@ -124,9 +122,7 @@ def get_source_addr_from_candidate_set(dst, candidate_set):
 
         if sa == sb:
             return 0
-        if sa > sb:
-            return 1
-        return -1
+        return 1 if sa > sb else -1
 
     def rfc3484_cmp(source_a, source_b):
         # type: (str, str) -> int
@@ -144,16 +140,9 @@ def get_source_addr_from_candidate_set(dst, candidate_set):
         # Rule 2: Prefer appropriate scope
         tmp = scope_cmp(source_a, source_b)
         if tmp == -1:
-            if scope_cmp(source_a, dst) == -1:
-                return 1
-            else:
-                return -1
+            return 1 if scope_cmp(source_a, dst) == -1 else -1
         elif tmp == 1:
-            if scope_cmp(source_b, dst) == -1:
-                return 1
-            else:
-                return -1
-
+            return 1 if scope_cmp(source_b, dst) == -1 else -1
         # Rule 3: cannot be easily implemented
         # Rule 4: cannot be easily implemented
         # Rule 5: does not make sense here
@@ -196,8 +185,6 @@ def in6_getAddrType(addr):
         addrScope = paddr[3]
         if addrScope == '2':
             addrType = (IPV6_ADDR_LINKLOCAL | IPV6_ADDR_MULTICAST)
-        elif addrScope == 'e':
-            addrType = (IPV6_ADDR_GLOBAL | IPV6_ADDR_MULTICAST)
         else:
             addrType = (IPV6_ADDR_GLOBAL | IPV6_ADDR_MULTICAST)
     elif ((orb(naddr[0]) == 0xfe) and ((int(paddr[2], 16) & 0xC) == 0x8)):
@@ -228,8 +215,8 @@ def in6_mactoifaceid(mac, ulbit=None):
     m = "".join(mac.split(':'))
     if len(m) != 12:
         raise ValueError("Invalid MAC")
-    first = int(m[0:2], 16)
-    if ulbit is None or not (ulbit == 0 or ulbit == 1):
+    first = int(m[:2], 16)
+    if ulbit is None or ulbit not in [0, 1]:
         ulbit = [1, 0, 0][first & 0x02]
     ulbit *= 2
     first_b = "%.02x" % ((first & 0xFD) | ulbit)
@@ -246,7 +233,7 @@ def in6_ifaceidtomac(ifaceid_s):
     """
     try:
         # Set ifaceid to a binary form
-        ifaceid = inet_pton(socket.AF_INET6, "::" + ifaceid_s)[8:16]
+        ifaceid = inet_pton(socket.AF_INET6, f"::{ifaceid_s}")[8:16]
     except Exception:
         return None
 
@@ -393,9 +380,7 @@ def in6_6to4ExtractAddr(addr):
         baddr = inet_pton(socket.AF_INET6, addr)
     except Exception:
         return None
-    if baddr[:2] != b" \x02":
-        return None
-    return inet_ntop(socket.AF_INET, baddr[2:6])
+    return None if baddr[:2] != b" \x02" else inet_ntop(socket.AF_INET, baddr[2:6])
 
 
 def in6_getLocalUniquePrefix():
@@ -422,7 +407,7 @@ def in6_getLocalUniquePrefix():
     btod = struct.pack("!II", i, j)
     mac = RandMAC()
     # construct modified EUI-64 ID
-    eui64 = inet_pton(socket.AF_INET6, '::' + in6_mactoifaceid(mac))[8:]
+    eui64 = inet_pton(socket.AF_INET6, f'::{in6_mactoifaceid(mac)}')[8:]
     import hashlib
     globalid = hashlib.sha1(btod + eui64).digest()[:5]
     return inet_ntop(socket.AF_INET6, b'\xfd' + globalid + b'\x00' * 10)
@@ -452,8 +437,8 @@ def in6_getRandomizedIfaceId(ifaceid, previous=None):
     if previous is None:
         b_previous = bytes(RandBin(8))
     else:
-        b_previous = inet_pton(socket.AF_INET6, "::" + previous)[8:]
-    s = inet_pton(socket.AF_INET6, "::" + ifaceid)[8:] + b_previous
+        b_previous = inet_pton(socket.AF_INET6, f"::{previous}")[8:]
+    s = inet_pton(socket.AF_INET6, f"::{ifaceid}")[8:] + b_previous
     import hashlib
     s = hashlib.md5(s).digest()
     s1, s2 = s[:8], s[8:]
@@ -486,7 +471,7 @@ def in6_ctop(addr):
         j = _rfc1924map.index(c)
         i = 85 * i + j
     res = []
-    for j in range(4):
+    for _ in range(4):
         res.append(struct.pack("!I", i % 2**32))
         i = i // (2**32)
     res.reverse()
@@ -504,10 +489,8 @@ def in6_ptoc(addr):
         d = struct.unpack("!IIII", inet_pton(socket.AF_INET6, addr))
     except Exception:
         return None
-    rem = 0
     m = [2**96, 2**64, 2**32, 1]
-    for i in range(4):
-        rem += d[i] * m[i]
+    rem = sum(d[i] * m[i] for i in range(4))
     res = []  # type: List[str]
     while rem:
         res.append(_rfc1924map[rem % 85])
@@ -538,8 +521,8 @@ def in6_isaddrTeredo(x):
     Otherwise, False is returned. Address must be passed in printable
     format.
     """
-    our = inet_pton(socket.AF_INET6, x)[0:4]
-    teredoPrefix = inet_pton(socket.AF_INET6, conf.teredoPrefix)[0:4]
+    our = inet_pton(socket.AF_INET6, x)[:4]
+    teredoPrefix = inet_pton(socket.AF_INET6, conf.teredoPrefix)[:4]
     return teredoPrefix == our
 
 
@@ -645,7 +628,7 @@ def in6_cidr2mask(m):
         raise Scapy_Exception("value provided to in6_cidr2mask outside [0, 128] domain (%d)" % m)  # noqa: E501
 
     t = []
-    for i in range(0, 4):
+    for _ in range(4):
         t.append(max(0, 2**32 - 2**(32 - min(32, m))))
         m -= 32
 
@@ -673,9 +656,7 @@ def in6_getnsmac(a):
     """
 
     ba = struct.unpack('16B', a)[-4:]
-    mac = '33:33:'
-    mac += ':'.join("%.2x" % x for x in ba)
-    return mac
+    return '33:33:' + ':'.join("%.2x" % x for x in ba)
 
 
 def in6_getha(prefix):

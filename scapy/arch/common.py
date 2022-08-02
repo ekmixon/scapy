@@ -133,8 +133,8 @@ def compile_filter(filter_exp,  # type: str
         except Exception:
             # Failed to use linktype: use the interface
             pass
-        if not linktype and conf.use_bpf:
-            linktype = ARPHDR_ETHER
+    if not linktype and conf.use_bpf:
+        linktype = ARPHDR_ETHER
     if linktype is not None:
         ret = pcap_compile_nopcap(
             MTU, linktype, ctypes.byref(bpf), bpf_filter, 0, -1
@@ -145,8 +145,7 @@ def compile_filter(filter_exp,  # type: str
         pcap = pcap_open_live(
             iface_b, MTU, promisc, 0, err
         )
-        error = bytes(bytearray(err)).strip(b"\x00")
-        if error:
+        if error := bytes(bytearray(err)).strip(b"\x00"):
             raise OSError(error)
         ret = pcap_compile(
             pcap, ctypes.byref(bpf), bpf_filter, 0, -1
@@ -154,6 +153,7 @@ def compile_filter(filter_exp,  # type: str
         pcap_close(pcap)
     if ret == -1:
         raise Scapy_Exception(
-            "Failed to compile filter expression %s (%s)" % (filter_exp, ret)
+            f"Failed to compile filter expression {filter_exp} ({ret})"
         )
+
     return bpf

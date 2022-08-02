@@ -53,9 +53,9 @@ class _SuperSocket_metaclass(_Generic_metaclass):
     def __repr__(self):
         # type: () -> str
         if self.desc is not None:
-            return "<%s: %s>" % (self.__name__, self.desc)
+            return f"<{self.__name__}: {self.desc}>"
         else:
-            return "<%s>" % self.__name__
+            return f"<{self.__name__}>"
 
 
 # Used to get ancillary data
@@ -106,10 +106,7 @@ class SuperSocket:
         except AttributeError:
             pass
 
-        if self.outs:
-            return self.outs.send(sx)
-        else:
-            return 0
+        return self.outs.send(sx) if self.outs else 0
 
     if six.PY2:
         def _recv_raw(self, sock, x):
@@ -144,7 +141,7 @@ class SuperSocket:
                         #       Data is not supported by the Linux kernel.
                         return pkt, sa_ll, timestamp
                     if auxdata.tp_vlan_tci != 0 or \
-                            auxdata.tp_status & TP_STATUS_VLAN_VALID:
+                                    auxdata.tp_status & TP_STATUS_VLAN_VALID:
                         # Insert VLAN tag
                         tpid = ETH_P_8021Q
                         if auxdata.tp_status & TP_STATUS_VLAN_TPID_VALID:
@@ -156,7 +153,7 @@ class SuperSocket:
                         )
                         pkt = pkt[:12] + tag + pkt[12:]
                 elif cmsg_lvl == socket.SOL_SOCKET and \
-                        cmsg_type == SO_TIMESTAMPNS:
+                                cmsg_type == SO_TIMESTAMPNS:
                     length = len(cmsg_data)
                     if length == 16:  # __kernel_timespec
                         tmp = struct.unpack("ll", cmsg_data)
@@ -201,13 +198,15 @@ class SuperSocket:
         if self.closed:
             return
         self.closed = True
-        if getattr(self, "outs", None):
-            if getattr(self, "ins", None) != self.outs:
-                if self.outs and (WINDOWS or self.outs.fileno() != -1):
-                    self.outs.close()
-        if getattr(self, "ins", None):
-            if WINDOWS or self.ins.fileno() != -1:
-                self.ins.close()
+        if (
+            getattr(self, "outs", None)
+            and getattr(self, "ins", None) != self.outs
+            and self.outs
+            and (WINDOWS or self.outs.fileno() != -1)
+        ):
+            self.outs.close()
+        if getattr(self, "ins", None) and (WINDOWS or self.ins.fileno() != -1):
+            self.ins.close()
 
     def sr(self, *args, **kargs):
         # type: (Any, Any) -> Tuple[SndRcvList, PacketList]
@@ -219,17 +218,12 @@ class SuperSocket:
         # type: (Any, Any) -> Optional[Packet]
         from scapy import sendrecv
         ans = sendrecv.sndrcv(self, *args, **kargs)[0]  # type: SndRcvList
-        if len(ans) > 0:
-            pkt = ans[0][1]  # type: Packet
-            return pkt
-        else:
-            return None
+        return ans[0][1] if len(ans) > 0 else None
 
     def sniff(self, *args, **kargs):
         # type: (Any, Any) -> PacketList
         from scapy import sendrecv
-        pkts = sendrecv.sniff(opened_socket=self, *args, **kargs)  # type: PacketList  # noqa: E501
-        return pkts
+        return sendrecv.sniff(opened_socket=self, *args, **kargs)
 
     def tshark(self, *args, **kargs):
         # type: (Any, Any) -> None
@@ -472,12 +466,11 @@ class L2ListenTcpdump(SuperSocket):
             args.extend(['-i', network_name(iface)])
         if not promisc:
             args.append('-p')
-        if not nofilter:
-            if conf.except_filter:
-                if filter:
-                    filter = "(%s) and not (%s)" % (filter, conf.except_filter)
-                else:
-                    filter = "not (%s)" % conf.except_filter
+        if not nofilter and conf.except_filter:
+            if filter:
+                filter = f"({filter}) and not ({conf.except_filter})"
+            else:
+                filter = f"not ({conf.except_filter})"
         if filter is not None:
             args.append(filter)
         self.tcpdump_proc = tcpdump(None, prog=prog, args=args, getproc=True)

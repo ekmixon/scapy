@@ -80,10 +80,7 @@ class Route:
         if gw is None:
             gw = "0.0.0.0"
         if dev is None:
-            if gw:
-                nhop = gw
-            else:
-                nhop = thenet
+            nhop = gw or thenet
             dev, ifaddr, _ = self.route(nhop)
         else:
             ifaddr = get_if_addr(dev)
@@ -129,11 +126,7 @@ class Route:
     def ifdel(self, iff):
         # type: (str) -> None
         self.invalidate_cache()
-        new_routes = []
-        for rt in self.routes:
-            if iff == rt[3]:
-                continue
-            new_routes.append(rt)
+        new_routes = [rt for rt in self.routes if iff != rt[3]]
         self.routes = new_routes
 
     def ifadd(self, iff, addr):
@@ -170,7 +163,7 @@ class Route:
             idx = _dst.find("-")
             if idx < 0:
                 break
-            m = (_dst[idx:] + ".").find(".")
+            m = f"{_dst[idx:]}.".find(".")
             _dst = _dst[:idx] + _dst[idx + m:]
 
         atol_dst = atol(_dst)
@@ -202,10 +195,8 @@ class Route:
         # type: (str) -> List[str]
         bcast_list = []
         for net, msk, gw, iface, addr, metric in self.routes:
-            if net == 0:
+            if net == 0 or msk == 0xFFFFFFFF:
                 continue    # Ignore default route "0.0.0.0"
-            elif msk == 0xffffffff:
-                continue    # Ignore host-specific routes
             if iff != iface:
                 continue
             bcast = net | (~msk & 0xffffffff)

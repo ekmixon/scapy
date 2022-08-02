@@ -97,11 +97,11 @@ def get_if_raw_addr(ifname):
 def get_if_raw_hwaddr(ifname):
     """Returns the packed MAC address configured on 'ifname'."""
 
-    NULL_MAC_ADDRESS = b'\x00' * 6
-
     ifname = network_name(ifname)
     # Handle the loopback interface separately
     if ifname == conf.loopback_name:
+        NULL_MAC_ADDRESS = b'\x00' * 6
+
         return (ARPHDR_LOOPBACK, NULL_MAC_ADDRESS)
 
     # Get ifconfig output
@@ -111,8 +111,10 @@ def get_if_raw_hwaddr(ifname):
     )
     stdout, stderr = subproc.communicate()
     if subproc.returncode:
-        raise Scapy_Exception("Failed to execute ifconfig: (%s)" %
-                              plain_str(stderr).strip())
+        raise Scapy_Exception(
+            f"Failed to execute ifconfig: ({plain_str(stderr).strip()})"
+        )
+
 
     # Get MAC addresses
     addresses = [
@@ -121,7 +123,7 @@ def get_if_raw_hwaddr(ifname):
         )
     ]
     if not addresses:
-        raise Scapy_Exception("No MAC address found on %s !" % ifname)
+        raise Scapy_Exception(f"No MAC address found on {ifname} !")
 
     # Pack and return the MAC address
     mac = addresses[0].split(' ')[1]
@@ -129,7 +131,7 @@ def get_if_raw_hwaddr(ifname):
 
     # Check that the address length is correct
     if len(mac) != 6:
-        raise Scapy_Exception("No MAC address found on %s !" % ifname)
+        raise Scapy_Exception(f"No MAC address found on {ifname} !")
 
     return (ARPHDR_ETHER, ''.join(mac))
 
@@ -193,9 +195,7 @@ def _get_if_flags(ifname):
         warning("ioctl(SIOCGIFFLAGS) failed on %s !", ifname)
         return None
 
-    # Convert flags
-    ifflags = struct.unpack("16xH14x", result)[0]
-    return ifflags
+    return struct.unpack("16xH14x", result)[0]
 
 
 class BPFInterfaceProvider(InterfaceProvider):

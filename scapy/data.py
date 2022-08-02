@@ -7,6 +7,7 @@
 Global variables and functions for handling external data sets.
 """
 
+
 import calendar
 import os
 import re
@@ -69,10 +70,7 @@ DLT_ARCNET = 7
 DLT_SLIP = 8
 DLT_PPP = 9
 DLT_FDDI = 10
-if OPENBSD:
-    DLT_RAW = 14
-else:
-    DLT_RAW = 12
+DLT_RAW = 14 if OPENBSD else 12
 DLT_RAW_ALT = 101  # At least in Argus
 if FREEBSD or NETBSD:
     DLT_SLIP_BSDOS = 13
@@ -368,8 +366,8 @@ def load_ethertypes(filename):
 def load_services(filename):
     # type: (str) -> Tuple[DADict[int, str], DADict[int, str]]
     spaces = re.compile(b"[ \t]+|\n")
-    tdct = DADict(_name="%s-tcp" % filename)  # type: DADict[int, str]
-    udct = DADict(_name="%s-udp" % filename)  # type: DADict[int, str]
+    tdct = DADict(_name=f"{filename}-tcp")
+    udct = DADict(_name=f"{filename}-udp")
     try:
         with open(filename, "rb") as fdesc:
             for line in fdesc:
@@ -431,9 +429,7 @@ class ManufDA(DADict[str, Tuple[str, str]]):
     def _resolve_MAC(self, mac):
         # type: (str) -> str
         oui = ":".join(mac.split(":")[:3]).upper()
-        if oui in self:
-            return ":".join([self[oui][0]] + mac.split(":")[3:])
-        return mac
+        return ":".join([self[oui][0]] + mac.split(":")[3:]) if oui in self else mac
 
     def lookup(self, mac):
         # type: (str) -> Tuple[str, str]
@@ -516,12 +512,16 @@ else:
     ETHER_TYPES = load_ethertypes("/etc/ethertypes")
     TCP_SERVICES, UDP_SERVICES = load_services("/etc/services")
     MANUFDB = ManufDA()
-    manuf_path = select_path(
-        ['/usr', '/usr/local', '/opt', '/opt/wireshark',
-         '/Applications/Wireshark.app/Contents/Resources'],
-        "share/wireshark/manuf"
-    )
-    if manuf_path:
+    if manuf_path := select_path(
+        [
+            '/usr',
+            '/usr/local',
+            '/opt',
+            '/opt/wireshark',
+            '/Applications/Wireshark.app/Contents/Resources',
+        ],
+        "share/wireshark/manuf",
+    ):
         try:
             MANUFDB = load_manuf(manuf_path)
         except (IOError, OSError):

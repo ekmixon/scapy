@@ -41,12 +41,10 @@ def _guess_iface_name(netif):
     return it.
     If there are none or more, then we return None.
     """
-    with os.popen('%s -l' % conf.prog.ifconfig) as fdesc:
+    with os.popen(f'{conf.prog.ifconfig} -l') as fdesc:
         ifaces = fdesc.readline().strip().split(' ')
     matches = [iface for iface in ifaces if iface.startswith(netif)]
-    if len(matches) == 1:
-        return matches[0]
-    return None
+    return matches[0] if len(matches) == 1 else None
 
 
 def read_routes():
@@ -138,6 +136,8 @@ def read_routes():
             pending_if.append((dest, netmask, gw))
     f.close()
 
+    # XXX: TODO add metrics
+    metric = 1
     # On Solaris, netstat does not provide output interfaces for some routes
     # We need to parse completely the routing table to route their gw and
     # know their output interface
@@ -145,13 +145,10 @@ def read_routes():
         gw_l = scapy.utils.atol(gw)
         max_rtmask, gw_if, gw_if_addr = 0, None, None
         for rtdst, rtmask, _, rtif, rtaddr, _ in routes[:]:
-            if gw_l & rtmask == rtdst:
-                if rtmask >= max_rtmask:
-                    max_rtmask = rtmask
-                    gw_if = rtif
-                    gw_if_addr = rtaddr
-        # XXX: TODO add metrics
-        metric = 1
+            if gw_l & rtmask == rtdst and rtmask >= max_rtmask:
+                max_rtmask = rtmask
+                gw_if = rtif
+                gw_if_addr = rtaddr
         if gw_if and gw_if_addr:
             routes.append((dest, netmask, gw, gw_if, gw_if_addr, metric))
         else:
@@ -172,7 +169,7 @@ def _in6_getifaddr(ifname):
 
     # Get the output of ifconfig
     try:
-        f = os.popen("%s %s" % (conf.prog.ifconfig, ifname))
+        f = os.popen(f"{conf.prog.ifconfig} {ifname}")
     except OSError:
         log_runtime.warning("Failed to execute ifconfig.")
         return []
@@ -214,10 +211,7 @@ def in6_getifaddr():
 
     # List all network interfaces
     if OPENBSD or SOLARIS:
-        if SOLARIS:
-            cmd = "%s -a6"
-        else:
-            cmd = "%s"
+        cmd = "%s -a6" if SOLARIS else "%s"
         try:
             f = os.popen(cmd % conf.prog.ifconfig)
         except OSError:
@@ -233,7 +227,7 @@ def in6_getifaddr():
 
     else:  # FreeBSD, NetBSD or Darwin
         try:
-            f = os.popen("%s -l" % conf.prog.ifconfig)
+            f = os.popen(f"{conf.prog.ifconfig} -l")
         except OSError:
             log_runtime.warning("Failed to execute ifconfig.")
             return []
@@ -275,7 +269,7 @@ def read_routes6():
 
         # Parse the routes header and try to identify extra columns
         if not got_header:
-            if "Destination" == line[:11]:
+            if line[:11] == "Destination":
                 got_header = True
                 mtu_present = "Mtu" in line
                 prio_present = "Prio" in line
@@ -296,9 +290,6 @@ def read_routes6():
                 warning("Not enough columns in route entry !")
                 continue
             destination, next_hop, flags, dev = splitted_line[:4]
-
-        # XXX: TODO: add metrics for unix.py (use -e option on netstat)
-        metric = 1
 
         # Check flags
         if "U" not in flags:  # usable route
@@ -364,6 +355,9 @@ def read_routes6():
             cset = construct_source_candidate_set(destination, destination_plen, devaddrs)  # noqa: E501
 
         if len(cset):
+            # XXX: TODO: add metrics for unix.py (use -e option on netstat)
+            metric = 1
+
             routes.append((destination, destination_plen, next_hop, dev, cset, metric))  # noqa: E501
 
     fd_netstat.close()

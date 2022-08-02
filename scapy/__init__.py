@@ -63,14 +63,9 @@ def _version_from_git_describe():
     if not tag.startswith("v"):
         # Upstream was not fetched
         commit = _git("git rev-list --tags --max-count=1")
-        tag = _git("git describe --tags --always --long %s" % commit)
+        tag = _git(f"git describe --tags --always --long {commit}")
     match = re.match('^v?(.+?)-(\\d+)-g[a-f0-9]+$', tag)
-    if match:
-        # remove the 'v' prefix and add a '.devN' suffix
-        return '%s.dev%s' % (match.group(1), match.group(2))
-    else:
-        # just remove the 'v' prefix
-        return re.sub('^v', '', tag)
+    return f'{match[1]}.dev{match[2]}' if match else re.sub('^v', '', tag)
 
 
 def _version():
@@ -98,11 +93,10 @@ def _version():
             # See 'man gitattributes' for more details.
             git_archive_id = '$Format:%h %d$'
             sha1 = git_archive_id.strip().split()[0]
-            match = re.search('tag:(\\S+)', git_archive_id)
-            if match:
-                return "git-archive.dev" + match.group(1)
+            if match := re.search('tag:(\\S+)', git_archive_id):
+                return "git-archive.dev" + match[1]
             elif sha1:
-                return "git-archive.dev" + sha1
+                return f"git-archive.dev{sha1}"
             else:
                 return 'unknown.version'
 

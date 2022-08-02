@@ -103,10 +103,7 @@ def get_if_raw_addr6(iff):
     is returned.
     """
     ip6 = get_if_addr6(iff)
-    if ip6 is not None:
-        return inet_pton(socket.AF_INET6, ip6)
-
-    return None
+    return inet_pton(socket.AF_INET6, ip6) if ip6 is not None else None
 
 
 # Next step is to import following architecture specific functions:

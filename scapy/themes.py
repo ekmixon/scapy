@@ -67,7 +67,7 @@ class ColorTable:
         Transform ansi encoded text to Pygments text
         """
         for k, v in self.inv_map.items():
-            x = x.replace(k, " " + v)
+            x = x.replace(k, f" {v}")
         return x.strip()
 
 
@@ -82,18 +82,16 @@ def create_styler(fmt=None,  # type: Optional[str]
     # type: (...) -> Callable[[Any], str]
     def do_style(val, fmt=fmt, fmt2=fmt2, before=before, after=after):
         # type: (Any, Optional[str], str, str, str) -> str
-        if fmt is None:
-            sval = str(val)
-        else:
-            sval = fmt % val
+        sval = str(val) if fmt is None else fmt % val
         return fmt2 % (before + sval + after)
+
     return do_style
 
 
 class ColorTheme:
     def __repr__(self):
         # type: () -> str
-        return "<%s>" % self.__class__.__name__
+        return f"<{self.__class__.__name__}>"
 
     def __reduce__(self):
         # type: () -> Tuple[type, Any, Any]
@@ -122,7 +120,7 @@ class AnsiColorTheme(ColorTheme):
         # type: (str) -> Callable[[Any], str]
         if attr.startswith("__"):
             raise AttributeError(attr)
-        s = "style_%s" % attr
+        s = f"style_{attr}"
         if s in self.__class__.__dict__:
             before = getattr(self, s)
             after = self.style_normal
@@ -265,7 +263,7 @@ class FormatTheme(ColorTheme):
         # type: (str) -> Callable[[Any], str]
         if attr.startswith("__"):
             raise AttributeError(attr)
-        colfmt = self.__class__.__dict__.get("style_%s" % attr, "%s")
+        colfmt = self.__class__.__dict__.get(f"style_{attr}", "%s")
         return create_styler(fmt2=colfmt)
 
 

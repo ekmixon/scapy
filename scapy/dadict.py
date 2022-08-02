@@ -37,7 +37,7 @@ def fixname(x):
     """
     x = plain_str(x)
     if x and str(x[0]) in "0123456789":
-        x = "n_" + x
+        x = f"n_{x}"
     return x.translate(
         "________________________________________________"
         "0123456789_______ABCDEFGHIJKLMNOPQRSTUVWXYZ______"
@@ -83,9 +83,7 @@ class DADict(Generic[_K, _V]):
         """
         Return value that is used as key for the direct access
         """
-        if isinstance(v, (str, bytes)):
-            return fixname(v)
-        return "unknown"
+        return fixname(v) if isinstance(v, (str, bytes)) else "unknown"
 
     def update(self, *args, **kwargs):
         # type: (*Dict[str, _V], **Dict[str, _V]) -> None
@@ -121,7 +119,7 @@ class DADict(Generic[_K, _V]):
 
     def __repr__(self):
         # type: () -> str
-        return "<%s - %s elements>" % (self._name, len(self))
+        return f"<{self._name} - {len(self)} elements>"
 
     def __getitem__(self, attr):
         # type: (_K) -> _V

@@ -6,6 +6,7 @@ Create a duplicate of the OpenSSL config to be able to use TLS < 1.2
 This returns the path to this new config file.
 """
 
+
 import os
 import re
 import subprocess
@@ -15,10 +16,10 @@ import tempfile
 OPENSSL_DIR = re.search(
     b"OPENSSLDIR: \"(.*)\"",
     subprocess.Popen(
-        ["openssl", "version", "-d"],
-        stdout=subprocess.PIPE
-    ).communicate()[0]
-).group(1).decode()
+        ["openssl", "version", "-d"], stdout=subprocess.PIPE
+    ).communicate()[0],
+)[1].decode()
+
 OPENSSL_CONFIG = os.path.join(OPENSSL_DIR, 'openssl.cnf')
 
 # https://askubuntu.com/a/1233456

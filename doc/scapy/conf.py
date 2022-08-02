@@ -68,7 +68,7 @@ master_doc = 'index'
 # General information about the project.
 project = 'Scapy'
 year = datetime.datetime.now().year
-copyright = '2008-%s Philippe Biondi and the Scapy community' % year
+copyright = f'2008-{year} Philippe Biondi and the Scapy community'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

@@ -108,27 +108,22 @@ class _PacketList(Generic[_Inner]):
         other = 0
         for r in self.res:
             f = 0
-            for p in stats:
+            for p, value in stats.items():
                 if self._elt2pkt(r).haslayer(p):
-                    stats[p] += 1
+                    value += 1
                     f = 1
                     break
             if not f:
                 other += 1
-        s = ""
         ct = conf.color_theme
-        for p in self.stats:
-            s += " %s%s%s" % (ct.packetlist_proto(p._name),
-                              ct.punct(":"),
-                              ct.packetlist_value(stats[p]))
-        s += " %s%s%s" % (ct.packetlist_proto("Other"),
-                          ct.punct(":"),
-                          ct.packetlist_value(other))
-        return "%s%s%s%s%s" % (ct.punct("<"),
-                               ct.packetlist_name(self.listname),
-                               ct.punct(":"),
-                               s,
-                               ct.punct(">"))
+        s = "".join(
+            f' {ct.packetlist_proto(p._name)}{ct.punct(":")}{ct.packetlist_value(stats[p])}'
+            for p in self.stats
+        )
+
+        s += f' {ct.packetlist_proto("Other")}{ct.punct(":")}{ct.packetlist_value(other)}'
+
+        return f'{ct.punct("<")}{ct.packetlist_name(self.listname)}{ct.punct(":")}{s}{ct.punct(">")}'
 
     def __getstate__(self):
         # type: () -> Dict[str, Any]
@@ -138,12 +133,7 @@ class _PacketList(Generic[_Inner]):
 
         :returns: dict representing this instance
         """
-        state = {
-            'res': self.res,
-            'stats': self.stats,
-            'listname': self.listname
-        }
-        return state
+        return {'res': self.res, 'stats': self.stats, 'listname': self.listname}
 
     def __setstate__(self, state):
         # type: (Dict[str, Any]) -> None
@@ -168,11 +158,13 @@ class _PacketList(Generic[_Inner]):
     def __getitem__(self, item):
         # type: (Any) -> Any
         if issubtype(item, BasePacket):
-            return self.__class__([x for x in self.res if item in self._elt2pkt(x)],  # noqa: E501
-                                  name="%s from %s" % (item.__name__, self.listname))  # noqa: E501
+            return self.__class__(
+                [x for x in self.res if item in self._elt2pkt(x)],
+                name=f"{item.__name__} from {self.listname}",
+            )
+
         if isinstance(item, slice):
-            return self.__class__(self.res.__getitem__(item),
-                                  name="mod %s" % self.listname)
+            return self.__class__(self.res.__getitem__(item), name=f"mod {self.listname}")
         return self.res.__getitem__(item)
 
     _T = TypeVar('_T', 'SndRcvList', 'PacketList')
@@ -183,11 +175,7 @@ class _PacketList(Generic[_Inner]):
                 ):
         # type: (...) -> _PacketList._T
         return self.__class__(
-            self.res + other.res,
-            name="%s+%s" % (
-                self.listname,
-                other.listname
-            )
+            self.res + other.res, name=f"{self.listname}+{other.listname}"
         )
 
     def summary(self,
@@ -209,9 +197,8 @@ class _PacketList(Generic[_Inner]):
             lfilter = lambda_tuple_converter(lfilter)
 
         for r in self.res:
-            if lfilter is not None:
-                if not lfilter(*r):
-                    continue
+            if lfilter is not None and not lfilter(*r):
+                continue
             if prn is None:
                 print(self._elt2sum(r))
             else:
@@ -236,9 +223,8 @@ class _PacketList(Generic[_Inner]):
             lfilter = lambda_tuple_converter(lfilter)
 
         for i, res in enumerate(self.res):
-            if lfilter is not None:
-                if not lfilter(*res):
-                    continue
+            if lfilter is not None and not lfilter(*res):
+                continue
             print(conf.color_theme.id(i, fmt="%04i"), end=' ')
             if prn is None:
                 print(self._elt2sum(res))
@@ -259,8 +245,9 @@ class _PacketList(Generic[_Inner]):
         # Python 2 backward compatibility
         func = lambda_tuple_converter(func)
 
-        return self.__class__([x for x in self.res if func(*x)],
-                              name="filtered %s" % self.listname)
+        return self.__class__(
+            [x for x in self.res if func(*x)], name=f"filtered {self.listname}"
+        )
 
     def make_table(self, *args, **kargs):
         # type: (Any, Any) -> Optional[str]
@@ -303,7 +290,7 @@ class _PacketList(Generic[_Inner]):
             lst_pkts = [f(*e) for e in self.res if lfilter(*e)]
 
         # Mimic the default gnuplot output
-        if kargs == {}:
+        if not kargs:
             kargs = MATPLOTLIB_DEFAULT_PLOT_KARGS
         if plot_xy:
             lines = plt.plot(*zip(*lst_pkts), **kargs)
@@ -339,7 +326,7 @@ class _PacketList(Generic[_Inner]):
                         if lfilter(self.res[i])]
 
         # Mimic the default gnuplot output
-        if kargs == {}:
+        if not kargs:
             kargs = MATPLOTLIB_DEFAULT_PLOT_KARGS
         lines = plt.plot(lst_pkts, **kargs)
 
@@ -434,14 +421,13 @@ class _PacketList(Generic[_Inner]):
         """Same as hexraw(), for Padding layer"""
         for i, res in enumerate(self.res):
             p = self._elt2pkt(res)
-            if p.haslayer(conf.padding_layer):
-                if lfilter is None or lfilter(p):
-                    print("%s %s %s" % (conf.color_theme.id(i, fmt="%04i"),
-                                        p.sprintf("%.time%"),
-                                        self._elt2sum(res)))
-                    hexdump(
-                        p.getlayer(conf.padding_layer).load  # type: ignore
-                    )
+            if p.haslayer(conf.padding_layer) and (lfilter is None or lfilter(p)):
+                print("%s %s %s" % (conf.color_theme.id(i, fmt="%04i"),
+                                    p.sprintf("%.time%"),
+                                    self._elt2sum(res)))
+                hexdump(
+                    p.getlayer(conf.padding_layer).load  # type: ignore
+                )
 
     def nzpadding(self, lfilter=None):
         # type: (Optional[Callable[..., bool]]) -> None
@@ -570,9 +556,7 @@ class _PacketList(Generic[_Inner]):
         mine, maxe = minmax(x for x, _ in six.itervalues(el))
         mind, maxd = minmax(six.itervalues(dl))
 
-        gr = 'digraph "afterglow" {\n\tedge [len=2.5];\n'
-
-        gr += "# src nodes\n"
+        gr = 'digraph "afterglow" {\n\tedge [len=2.5];\n' + "# src nodes\n"
         for s in sl:
             n, _ = sl[s]
             n = 1 + float(n - mins) / (maxs - mins)
@@ -671,7 +655,7 @@ class _PacketList(Generic[_Inner]):
           lst.replace( (IP.ttl, 64), (TCP.sport, 666, 777), )
         """
         delete_checksums = kargs.get("delete_checksums", False)
-        x = PacketList(name="Replaced %s" % self.listname)
+        x = PacketList(name=f"Replaced {self.listname}")
         if not isinstance(args[0], tuple):
             args = (args,)
         for _p in self.res:
@@ -682,14 +666,15 @@ class _PacketList(Generic[_Inner]):
                 old = scheme[1]  # not used if len(scheme) == 2
                 new = scheme[-1]
                 for o in fld.owners:
-                    if o in p:
-                        if len(scheme) == 2 or p[o].getfieldval(fld.name) == old:  # noqa: E501
-                            if not copied:
-                                p = p.copy()
-                                if delete_checksums:
-                                    p.delete_checksums()
-                                copied = True
-                            setattr(p[o], fld.name, new)
+                    if o in p and (
+                        len(scheme) == 2 or p[o].getfieldval(fld.name) == old
+                    ):
+                        if not copied:
+                            p = p.copy()
+                            if delete_checksums:
+                                p.delete_checksums()
+                            copied = True
+                        setattr(p[o], fld.name, new)
             x.append(p)
         return x
 
@@ -722,13 +707,13 @@ class _PacketList(Generic[_Inner]):
         :rtype: scapy.plist.PacketList
         """
         if name is None:
-            name = "{} layer {}".format(self.listname, cls.__name__)
+            name = f"{self.listname} layer {cls.__name__}"
         if stats is None:
             stats = self.stats
 
         getlayer_arg = {}  # type: Dict[str, Any]
         if flt is not None:
-            getlayer_arg.update(flt)
+            getlayer_arg |= flt
         getlayer_arg['cls'] = cls
         if nb is not None:
             getlayer_arg['nb'] = nb
@@ -810,4 +795,4 @@ class SndRcvList(_PacketList[QueryAnswer],
 
     def _elt2sum(self, elt):
         # type: (QueryAnswer) -> str
-        return "%s ==> %s" % (elt[0].summary(), elt[1].summary())
+        return f"{elt[0].summary()} ==> {elt[1].summary()}"

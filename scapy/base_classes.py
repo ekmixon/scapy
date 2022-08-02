@@ -97,8 +97,7 @@ class SetGen(Gen[_T]):
             if (isinstance(i, Gen) and
                 (self._iterpacket or not isinstance(i, BasePacket))) or (
                     isinstance(i, (range, types.GeneratorType))):
-                for j in i:
-                    yield j
+                yield from i
             else:
                 yield i
 
@@ -129,8 +128,7 @@ class Net(Gen[str]):
             )
         except socket.error:
             if re.search("(^|\\.)[0-9]+-[0-9]+($|\\.)", name) is not None:
-                raise Scapy_Exception("Ranges are no longer accepted in %s()" %
-                                      cls.__name__)
+                raise Scapy_Exception(f"Ranges are no longer accepted in {cls.__name__}()")
             raise
 
     @classmethod
@@ -148,8 +146,10 @@ class Net(Gen[str]):
     def __init__(self, net, stop=None):
         # type: (str, Union[None, str]) -> None
         if "*" in net:
-            raise Scapy_Exception("Wildcards are no longer accepted in %s()" %
-                                  self.__class__.__name__)
+            raise Scapy_Exception(
+                f"Wildcards are no longer accepted in {self.__class__.__name__}()"
+            )
+
         if stop is None:
             try:
                 net, mask = net.split("/", 1)
@@ -289,19 +289,17 @@ class Packet_metaclass(_Generic_metaclass):
                 bases,  # type: Tuple[type, ...]
                 dct  # type: Dict[str, Any]
                 ):
+        resolved_fld = []  # type: List[scapy.fields.Field[Any, Any]]
         # type: (...) -> Type['scapy.packet.Packet']
         if "fields_desc" in dct:  # perform resolution of references to other packets  # noqa: E501
             current_fld = dct["fields_desc"]  # type: List[Union[scapy.fields.Field[Any, Any], Packet_metaclass]]  # noqa: E501
-            resolved_fld = []  # type: List[scapy.fields.Field[Any, Any]]
             for fld_or_pkt in current_fld:
                 if isinstance(fld_or_pkt, Packet_metaclass):
                     # reference to another fields_desc
-                    for pkt_fld in fld_or_pkt.fields_desc:  # type: ignore
-                        resolved_fld.append(pkt_fld)
+                    resolved_fld.extend(iter(fld_or_pkt.fields_desc))
                 else:
                     resolved_fld.append(fld_or_pkt)
         else:  # look for a fields_desc in parent classes
-            resolved_fld = []
             for b in bases:
                 if hasattr(b, "fields_desc"):
                     resolved_fld = b.fields_desc  # type: ignore
@@ -334,17 +332,19 @@ class Packet_metaclass(_Generic_metaclass):
         dct.setdefault("__slots__", [])
         for attr in ["name", "overload_fields"]:
             try:
-                dct["_%s" % attr] = dct.pop(attr)
+                dct[f"_{attr}"] = dct.pop(attr)
             except KeyError:
                 pass
         newcls = type.__new__(cls, name, bases, dct)
         # Note: below can't be typed because we use attributes
         # created dynamically..
-        newcls.__all_slots__ = set(  # type: ignore
+        newcls.__all_slots__ = {
             attr
-            for cls in newcls.__mro__ if hasattr(cls, "__slots__")
+            for cls in newcls.__mro__
+            if hasattr(cls, "__slots__")
             for attr in cls.__slots__
-        )
+        }
+
 
         newcls.aliastypes = (  # type: ignore
             [newcls] + getattr(newcls, "aliastypes", [])
@@ -367,25 +367,17 @@ class Packet_metaclass(_Generic_metaclass):
                 return k  # type: ignore
         raise AttributeError(attr)
 
-    def __call__(cls,
-                 *args,  # type: Any
-                 **kargs  # type: Any
-                 ):
+    def __call__(self, *args, **kargs):
         # type: (...) -> 'scapy.packet.Packet'
-        if "dispatch_hook" in cls.__dict__:
+        if "dispatch_hook" in self.__dict__:
             try:
-                cls = cls.dispatch_hook(*args, **kargs)  # type: ignore
+                self = self.dispatch_hook(*args, **kargs)
             except Exception:
                 from scapy import config
                 if config.conf.debug_dissector:
                     raise
-                cls = config.conf.raw_layer  # type: ignore
-        i = cls.__new__(
-            cls,  # type: ignore
-            cls.__name__,
-            cls.__bases__,
-            cls.__dict__
-        )
+                self = config.conf.raw_layer
+        i = self.__new__(self, self.__name__, self.__bases__, self.__dict__)
         i.__init__(*args, **kargs)
         return i  # type: ignore
 
@@ -400,8 +392,7 @@ class Field_metaclass(_Generic_metaclass):
                 ):
         # type: (...) -> Type[scapy.fields.Field[Any, Any]]
         dct.setdefault("__slots__", [])
-        newcls = super(Field_metaclass, cls).__new__(cls, name, bases, dct)
-        return newcls
+        return super(Field_metaclass, cls).__new__(cls, name, bases, dct)
 
 
 PacketList_metaclass = Field_metaclass

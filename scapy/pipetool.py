@@ -54,7 +54,7 @@ class PipeEngine(ObjectPipe[str]):
             if pc.__doc__:
                 print("###### %s\n %s" % (pn, pc.__doc__))
             else:
-                print("###### %s" % pn)
+                print(f"###### {pn}")
 
     def __init__(self, *pipes):
         # type: (*Pipe) -> None
@@ -213,23 +213,16 @@ class PipeEngine(ObjectPipe[str]):
     def graph(self, **kargs):
         # type: (Any) -> None
         g = ['digraph "pipe" {', "\tnode [shape=rectangle];", ]
+        g.extend('\t"%i" [label="%s"];' % (id(p), p.name) for p in self.active_pipes)
+        g.extend(("", "\tedge [color=blue, arrowhead=vee];"))
         for p in self.active_pipes:
-            g.append('\t"%i" [label="%s"];' % (id(p), p.name))
-        g.append("")
-        g.append("\tedge [color=blue, arrowhead=vee];")
+            g.extend('\t"%i" -> "%i";' % (id(p), id(s)) for s in p.sinks)
+        g.extend(("", "\tedge [color=purple, arrowhead=veevee];"))
         for p in self.active_pipes:
-            for s in p.sinks:
-                g.append('\t"%i" -> "%i";' % (id(p), id(s)))
-        g.append("")
-        g.append("\tedge [color=purple, arrowhead=veevee];")
+            g.extend('\t"%i" -> "%i";' % (id(p), id(hs)) for hs in p.high_sinks)
+        g.extend(("", "\tedge [color=red, arrowhead=diamond];"))
         for p in self.active_pipes:
-            for hs in p.high_sinks:
-                g.append('\t"%i" -> "%i";' % (id(p), id(hs)))
-        g.append("")
-        g.append("\tedge [color=red, arrowhead=diamond];")
-        for p in self.active_pipes:
-            for ts in p.trigger_sinks:
-                g.append('\t"%i" -> "%i";' % (id(p), id(ts)))
+            g.extend('\t"%i" -> "%i";' % (id(p), id(ts)) for ts in p.trigger_sinks)
         g.append('}')
         graph = "\n".join(g)
         do_graph(graph, **kargs)
@@ -262,7 +255,7 @@ class Pipe:
         self.trigger_sources = set()  # type: Set['Pipe']
         self.trigger_sinks = set()  # type: Set['TriggerSink']
         if name is None:
-            name = "%s" % (self.__class__.__name__)
+            name = f"{self.__class__.__name__}"
         self.name = name
 
     def _send(self, msg):
@@ -309,38 +302,38 @@ class Pipe:
     def __repr__(self):
         # type: () -> str
         ct = conf.color_theme
-        s = "%s%s" % (ct.punct("<"), ct.layer_name(self.name))
+        s = f'{ct.punct("<")}{ct.layer_name(self.name)}'
         if self.sources or self.sinks:
-            s += " %s" % ct.punct("[")
+            s += f' {ct.punct("[")}'
             if self.sources:
-                s += "%s%s" % (ct.punct(",").join(ct.field_name(s.name) for s in self.sources),  # noqa: E501
-                               ct.field_value(">"))
+                s += f'{ct.punct(",").join((ct.field_name(s.name) for s in self.sources))}{ct.field_value(">")}'
+
             s += ct.layer_name("#")
             if self.sinks:
-                s += "%s%s" % (ct.field_value(">"),
-                               ct.punct(",").join(ct.field_name(s.name) for s in self.sinks))  # noqa: E501
+                s += f'{ct.field_value(">")}{ct.punct(",").join((ct.field_name(s.name) for s in self.sinks))}'
+
             s += ct.punct("]")
 
         if self.high_sources or self.high_sinks:
-            s += " %s" % ct.punct("[")
+            s += f' {ct.punct("[")}'
             if self.high_sources:
-                s += "%s%s" % (ct.punct(",").join(ct.field_name(s.name) for s in self.high_sources),  # noqa: E501
-                               ct.field_value(">>"))
+                s += f'{ct.punct(",").join((ct.field_name(s.name) for s in self.high_sources))}{ct.field_value(">>")}'
+
             s += ct.layer_name("#")
             if self.high_sinks:
-                s += "%s%s" % (ct.field_value(">>"),
-                               ct.punct(",").join(ct.field_name(s.name) for s in self.high_sinks))  # noqa: E501
+                s += f'{ct.field_value(">>")}{ct.punct(",").join((ct.field_name(s.name) for s in self.high_sinks))}'
+
             s += ct.punct("]")
 
         if self.trigger_sources or self.trigger_sinks:
-            s += " %s" % ct.punct("[")
+            s += f' {ct.punct("[")}'
             if self.trigger_sources:
-                s += "%s%s" % (ct.punct(",").join(ct.field_name(s.name) for s in self.trigger_sources),  # noqa: E501
-                               ct.field_value("^"))
+                s += f'{ct.punct(",").join((ct.field_name(s.name) for s in self.trigger_sources))}{ct.field_value("^")}'
+
             s += ct.layer_name("#")
             if self.trigger_sinks:
-                s += "%s%s" % (ct.field_value("^"),
-                               ct.punct(",").join(ct.field_name(s.name) for s in self.trigger_sinks))  # noqa: E501
+                s += f'{ct.field_value("^")}{ct.punct(",").join((ct.field_name(s.name) for s in self.trigger_sinks))}'
+
             s += ct.punct("]")
 
         s += ct.punct(">")
@@ -481,8 +474,6 @@ class AutoSource(Source):
     def deliver(self):
         # type: () -> None
         msg, high, exhaust = self.recv()  # type: ignore
-        if exhaust:
-            pass
         if high:
             self._high_send(msg)
         else:
@@ -524,11 +515,11 @@ class ConsoleSink(Sink):
 
     def push(self, msg):
         # type: (str) -> None
-        print(">" + repr(msg))
+        print(f">{repr(msg)}")
 
     def high_push(self, msg):
         # type: (str) -> None
-        print(">>" + repr(msg))
+        print(f">>{repr(msg)}")
 
 
 class RawConsoleSink(Sink):
@@ -621,10 +612,7 @@ class PeriodicSource(ThreadGenSource):
     def __init__(self, msg, period, period2=0, name=None):
         # type: (Union[Iterable[Any], Any], int, int, Optional[str]) -> None
         ThreadGenSource.__init__(self, name=name)
-        if not isinstance(msg, (list, set, tuple)):
-            self.msg = [msg]  # type: Iterable[Any]
-        else:
-            self.msg = msg
+        self.msg = msg if isinstance(msg, (list, set, tuple)) else [msg]
         self.period = period
         self.period2 = period2
 
@@ -681,18 +669,19 @@ class TermSink(Sink):
     if WINDOWS:
         def _start_windows(self):
             # type: () -> None
-            if not self.opened:
-                self.opened = True
-                self.__f = get_temp_file()
-                open(self.__f, "a").close()
-                self.name = "Scapy" if self.name is None else self.name
-                # Start a powershell in a new window and print the PID
-                cmd = "$app = Start-Process PowerShell -ArgumentList '-command &{$host.ui.RawUI.WindowTitle=\\\"%s\\\";Get-Content \\\"%s\\\" -wait}' -passthru; echo $app.Id" % (self.name, self.__f.replace("\\", "\\\\"))  # noqa: E501
-                proc = subprocess.Popen([conf.prog.powershell, cmd], stdout=subprocess.PIPE)  # noqa: E501
-                output, _ = proc.communicate()
-                # This is the process PID
-                self.pid = int(output)
-                print("PID: %d" % self.pid)
+            if self.opened:
+                return
+            self.opened = True
+            self.__f = get_temp_file()
+            open(self.__f, "a").close()
+            self.name = "Scapy" if self.name is None else self.name
+            # Start a powershell in a new window and print the PID
+            cmd = "$app = Start-Process PowerShell -ArgumentList '-command &{$host.ui.RawUI.WindowTitle=\\\"%s\\\";Get-Content \\\"%s\\\" -wait}' -passthru; echo $app.Id" % (self.name, self.__f.replace("\\", "\\\\"))  # noqa: E501
+            proc = subprocess.Popen([conf.prog.powershell, cmd], stdout=subprocess.PIPE)  # noqa: E501
+            output, _ = proc.communicate()
+            # This is the process PID
+            self.pid = int(output)
+            print("PID: %d" % self.pid)
 
         def _stop_windows(self):
             # type: () -> None
@@ -708,17 +697,18 @@ class TermSink(Sink):
     else:
         def _start_unix(self):
             # type: () -> None
-            if not self.opened:
-                self.opened = True
-                rdesc, self.wdesc = os.pipe()
-                cmd = ["xterm"]
-                if self.name is not None:
-                    cmd.extend(["-title", self.name])
-                if self.keepterm:
-                    cmd.append("-hold")
-                cmd.extend(["-e", "cat <&%d" % rdesc])
-                self.proc = subprocess.Popen(cmd, close_fds=False)
-                os.close(rdesc)
+            if self.opened:
+                return
+            self.opened = True
+            rdesc, self.wdesc = os.pipe()
+            cmd = ["xterm"]
+            if self.name is not None:
+                cmd.extend(["-title", self.name])
+            if self.keepterm:
+                cmd.append("-hold")
+            cmd.extend(["-e", "cat <&%d" % rdesc])
+            self.proc = subprocess.Popen(cmd, close_fds=False)
+            os.close(rdesc)
 
         def _stop_unix(self):
             # type: () -> None
@@ -729,26 +719,19 @@ class TermSink(Sink):
 
     def start(self):
         # type: () -> None
-        if WINDOWS:
-            return self._start_windows()
-        else:
-            return self._start_unix()
+        return self._start_windows() if WINDOWS else self._start_unix()
 
     def stop(self):
         # type: () -> None
-        if WINDOWS:
-            return self._stop_windows()
-        else:
-            return self._stop_unix()
+        return self._stop_windows() if WINDOWS else self._stop_unix()
 
     def _print(self, s):
         # type: (str) -> None
         if self.newlines:
             s += "\n"
         if WINDOWS:
-            wdesc = open(self.__f, "a")
-            wdesc.write(s)
-            wdesc.close()
+            with open(self.__f, "a") as wdesc:
+                wdesc.write(s)
         else:
             os.write(self.wdesc, s.encode())
 

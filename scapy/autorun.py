@@ -45,46 +45,45 @@ class ScapyAutorunInterpreter(code.InteractiveInterpreter):
 def autorun_commands(cmds, my_globals=None, verb=None):
     sv = conf.verb
     try:
+        interp = ScapyAutorunInterpreter()
+        if my_globals is None:
+            from scapy.main import _scapy_builtins
+            my_globals = _scapy_builtins()
+        interp.locals = my_globals
         try:
-            interp = ScapyAutorunInterpreter()
-            if my_globals is None:
-                from scapy.main import _scapy_builtins
-                my_globals = _scapy_builtins()
-            interp.locals = my_globals
-            try:
-                del six.moves.builtins.__dict__["scapy_session"]["_"]
-            except KeyError:
-                pass
-            if verb is not None:
-                conf.verb = verb
-            cmd = ""
-            cmds = cmds.splitlines()
-            cmds.append("")  # ensure we finish multi-line commands
-            cmds.reverse()
-            while True:
-                if cmd:
-                    sys.stderr.write(sys.__dict__.get("ps2", "... "))
-                else:
-                    sys.stderr.write(sys.__dict__.get("ps1", ">>> "))
-
-                line = cmds.pop()
-                print(line)
-                cmd += "\n" + line
-                sys.last_value = None
-                if interp.runsource(cmd):
-                    continue
-                if sys.last_value:  # An error occurred
-                    traceback.print_exception(sys.last_type,
-                                              sys.last_value,
-                                              sys.last_traceback.tb_next,
-                                              file=sys.stdout)
-                    sys.last_value = None
-                    return False
-                cmd = ""
-                if len(cmds) <= 1:
-                    break
-        except SystemExit:
+            del six.moves.builtins.__dict__["scapy_session"]["_"]
+        except KeyError:
             pass
+        if verb is not None:
+            conf.verb = verb
+        cmd = ""
+        cmds = cmds.splitlines()
+        cmds.append("")  # ensure we finish multi-line commands
+        cmds.reverse()
+        while True:
+            if cmd:
+                sys.stderr.write(sys.__dict__.get("ps2", "... "))
+            else:
+                sys.stderr.write(sys.__dict__.get("ps1", ">>> "))
+
+            line = cmds.pop()
+            print(line)
+            cmd += "\n" + line
+            sys.last_value = None
+            if interp.runsource(cmd):
+                continue
+            if sys.last_value:  # An error occurred
+                traceback.print_exception(sys.last_type,
+                                          sys.last_value,
+                                          sys.last_traceback.tb_next,
+                                          file=sys.stdout)
+                sys.last_value = None
+                return False
+            cmd = ""
+            if len(cmds) <= 1:
+                break
+    except SystemExit:
+        pass
     finally:
         conf.verb = sv
     try:
@@ -147,13 +146,12 @@ def autorun_get_interactive_session(cmds, **kargs):
     log_scapy.removeHandler(h_old)
     log_scapy.addHandler(logging.StreamHandler(stream=sw))
     try:
-        try:
-            sys.stdout = sys.stderr = sw
-            sys.excepthook = sys.__excepthook__
-            res = autorun_commands_timeout(cmds, **kargs)
-        except StopAutorun as e:
-            e.code_run = sw.s
-            raise
+        sys.stdout = sys.stderr = sw
+        sys.excepthook = sys.__excepthook__
+        res = autorun_commands_timeout(cmds, **kargs)
+    except StopAutorun as e:
+        e.code_run = sw.s
+        raise
     finally:
         sys.stdout, sys.stderr, sys.excepthook = sstdout, sstderr, sexcepthook
         log_scapy.removeHandler(log_scapy.handlers[0])
@@ -172,12 +170,11 @@ def autorun_get_interactive_live_session(cmds, **kargs):
     sstdout, sstderr = sys.stdout, sys.stderr
     sw = StringWriter(debug=sstdout)
     try:
-        try:
-            sys.stdout = sys.stderr = sw
-            res = autorun_commands_timeout(cmds, **kargs)
-        except StopAutorun as e:
-            e.code_run = sw.s
-            raise
+        sys.stdout = sys.stderr = sw
+        res = autorun_commands_timeout(cmds, **kargs)
+    except StopAutorun as e:
+        e.code_run = sw.s
+        raise
     finally:
         sys.stdout, sys.stderr = sstdout, sstderr
     return sw.s, res
@@ -217,12 +214,11 @@ def autorun_get_html_interactive_session(cmds, **kargs):
     ct = conf.color_theme
     to_html = lambda s: s.replace("<", "&lt;").replace(">", "&gt;").replace("#[#", "<").replace("#]#", ">")  # noqa: E501
     try:
-        try:
-            conf.color_theme = HTMLTheme2()
-            s, res = autorun_get_interactive_session(cmds, **kargs)
-        except StopAutorun as e:
-            e.code_run = to_html(e.code_run)
-            raise
+        conf.color_theme = HTMLTheme2()
+        s, res = autorun_get_interactive_session(cmds, **kargs)
+    except StopAutorun as e:
+        e.code_run = to_html(e.code_run)
+        raise
     finally:
         conf.color_theme = ct
 
@@ -233,12 +229,11 @@ def autorun_get_latex_interactive_session(cmds, **kargs):
     ct = conf.color_theme
     to_latex = lambda s: tex_escape(s).replace("@[@", "{").replace("@]@", "}").replace("@`@", "\\")  # noqa: E501
     try:
-        try:
-            conf.color_theme = LatexTheme2()
-            s, res = autorun_get_interactive_session(cmds, **kargs)
-        except StopAutorun as e:
-            e.code_run = to_latex(e.code_run)
-            raise
+        conf.color_theme = LatexTheme2()
+        s, res = autorun_get_interactive_session(cmds, **kargs)
+    except StopAutorun as e:
+        e.code_run = to_latex(e.code_run)
+        raise
     finally:
         conf.color_theme = ct
     return to_latex(s), res

@@ -86,9 +86,7 @@ def issubtype(x,  # type: Any
     """
     if isinstance(t, str):
         return t in (z.__name__ for z in x.__bases__)
-    if isinstance(x, type) and issubclass(x, t):
-        return True
-    return False
+    return isinstance(x, type) and issubclass(x, t)
 
 
 _Decimal = Union[Decimal, int]
@@ -182,7 +180,7 @@ def get_temp_file(keep=False, autoext="", fd=False):  # noqa: F811
     pass
 
 
-def get_temp_file(keep=False, autoext="", fd=False):  # noqa: F811
+def get_temp_file(keep=False, autoext="", fd=False):    # noqa: F811
     # type: (bool, str, bool) -> Union[IO[bytes], str]
     """Creates a temporary file.
 
@@ -198,10 +196,9 @@ def get_temp_file(keep=False, autoext="", fd=False):  # noqa: F811
 
     if fd:
         return f
-    else:
-        # Close the file so something else can take it.
-        f.close()
-        return f.name
+    # Close the file so something else can take it.
+    f.close()
+    return f.name
 
 
 def get_temp_dir(keep=False):
@@ -227,10 +224,7 @@ def sane(x, color=False):
     for i in x:
         j = orb(i)
         if (j < 32) or (j >= 127):
-            if color:
-                r += conf.color_theme.not_printable(".")
-            else:
-                r += "."
+            r += conf.color_theme.not_printable(".") if color else "."
         else:
             r += chr(j)
     return r
@@ -260,10 +254,12 @@ def lhex(x):
     if isinstance(x, six.integer_types):
         return hex(x)
     if isinstance(x, tuple):
-        return "(%s)" % ", ".join(lhex(v) for v in x)
-    if isinstance(x, list):
-        return "[%s]" % ", ".join(lhex(v) for v in x)
-    return str(x)
+        return f'({", ".join((lhex(v) for v in x))})'
+    return (
+        f'[{", ".join((lhex(v) for v in x))}]'
+        if isinstance(x, list)
+        else str(x)
+    )
 
 
 @conf.commands.register
@@ -278,23 +274,17 @@ def hexdump(p, dump=False):
     s = ""
     x = bytes_encode(p)
     x_len = len(x)
-    i = 0
-    while i < x_len:
+    for i in range(0, x_len, 16):
         s += "%04x  " % i
         for j in range(16):
-            if i + j < x_len:
-                s += "%02X " % orb(x[i + j])
-            else:
-                s += "   "
+            s += "%02X " % orb(x[i + j]) if i + j < x_len else "   "
         s += " %s\n" % sane(x[i:i + 16], color=True)
-        i += 16
     # remove trailing \n
     s = s[:-1] if s.endswith("\n") else s
     if dump:
         return s
-    else:
-        print(s)
-        return None
+    print(s)
+    return None
 
 
 @conf.commands.register
@@ -314,9 +304,8 @@ def linehexdump(p, onlyasc=0, onlyhex=0, dump=False):
     s = hexstr(p, onlyasc=onlyasc, onlyhex=onlyhex, color=not dump)
     if dump:
         return s
-    else:
-        print(s)
-        return None
+    print(s)
+    return None
 
 
 @conf.commands.register
@@ -336,9 +325,8 @@ def chexdump(p, dump=False):
     s = ", ".join("%#04x" % orb(x) for x in x)
     if dump:
         return s
-    else:
-        print(s)
-        return None
+    print(s)
+    return None
 
 
 @conf.commands.register
@@ -458,10 +446,7 @@ def hexdiff(a, b, autojunk=False):
                 if line[j]:
                     col = colorize[(linex[j] != liney[j]) * (doy - dox)]
                     print(col("%02X" % orb(line[j])), end=' ')
-                    if linex[j] == liney[j]:
-                        cl += sane(line[j], color=True)
-                    else:
-                        cl += col(sane(line[j]))
+                    cl += sane(line[j], color=True) if linex[j] == liney[j] else col(sane(line[j]))
                 else:
                     print("  ", end=' ')
                     cl += " "
@@ -477,11 +462,8 @@ def hexdiff(a, b, autojunk=False):
             dox = 1
             i += 16
         else:
-            if yy:
-                dox = 0
-                doy = 1
-            else:
-                i += 16
+            dox = 0
+            doy = 1
 
 
 if struct.pack("H", 1) == b"\x00\x01":  # big endian
@@ -734,12 +716,9 @@ class ContextManagerSubprocess(object):
             return None
         # Errored
         if isinstance(exc_value, EnvironmentError):
-            msg = "Could not execute %s, is it installed?" % self.prog
+            msg = f"Could not execute {self.prog}, is it installed?"
         else:
-            msg = "%s: execution failed (%s)" % (
-                self.prog,
-                exc_type.__class__.__name__
-            )
+            msg = f"{self.prog}: execution failed ({exc_type.__class__.__name__})"
         if not self.suppress:
             raise exc_type(msg)
         log_runtime.error(msg, exc_info=True)
@@ -827,14 +806,14 @@ def do_graph(
     start_viewer = False
     if target is None:
         if WINDOWS:
-            target = get_temp_file(autoext="." + format)
+            target = get_temp_file(autoext=f".{format}")
             start_viewer = True
         else:
             with ContextManagerSubprocess(conf.prog.display):
                 target = subprocess.Popen([conf.prog.display],
                                           stdin=subprocess.PIPE).stdin
     if format is not None:
-        format = "-T%s" % format
+        format = f"-T{format}"
     if isinstance(target, str):
         if target.startswith('|'):
             target = subprocess.Popen(target[1:].lstrip(), shell=True,
@@ -894,11 +873,7 @@ _TEX_TR = {
 
 
 def tex_escape(x):
-    # type: (str) -> str
-    s = ""
-    for c in x:
-        s += _TEX_TR.get(c, c)
-    return s
+    return "".join(_TEX_TR.get(c, c) for c in x)
 
 
 def colgen(*lstcol,  # type: Any
@@ -1006,7 +981,7 @@ class Enum_metaclass(type):
 
     def __repr__(self):
         # type: () -> str
-        return "<%s>" % self.__dict__.get("name", self.__name__)
+        return f'<{self.__dict__.get("name", self.__name__)}>'
 
 
 ###################
@@ -1141,14 +1116,14 @@ class PcapReader_metaclass(type):
             dct['alternative'].alternative = newcls
         return newcls
 
-    def __call__(cls, filename):  # type: ignore
+    def __call__(self, filename):    # type: ignore
         # type: (Union[IO[bytes], str]) -> Any
         """Creates a cls instance, use the `alternative` if that
         fails.
 
         """
-        i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
-        filename, fdesc, magic = cls.open(filename)
+        i = self.__new__(self, self.__name__, self.__bases__, self.__dict__)
+        filename, fdesc, magic = self.open(filename)
         if not magic:
             raise Scapy_Exception(
                 "No data could be read!"
@@ -1159,9 +1134,9 @@ class PcapReader_metaclass(type):
         except (Scapy_Exception, EOFError):
             pass
 
-        if "alternative" in cls.__dict__:
-            cls = cls.__dict__["alternative"]
-            i = cls.__new__(cls, cls.__name__, cls.__bases__, cls.__dict__)
+        if "alternative" in self.__dict__:
+            self = self.__dict__["alternative"]
+            i = self.__new__(self, self.__name__, self.__bases__, self.__dict__)
             try:
                 i.__init__(filename, fdesc, magic)
                 return i
@@ -1226,8 +1201,9 @@ class RawPcapReader:
         if len(hdr) < 20:
             raise Scapy_Exception("Invalid pcap file (too short)")
         vermaj, vermin, tz, sig, snaplen, linktype = struct.unpack(
-            self.endian + "HHIIII", hdr
+            f"{self.endian}HHIIII", hdr
         )
+
         self.linktype = linktype
         self.snaplen = snaplen
 
@@ -1259,7 +1235,7 @@ class RawPcapReader:
         hdr = self.f.read(16)
         if len(hdr) < 16:
             raise EOFError
-        sec, usec, caplen, wirelen = struct.unpack(self.endian + "IIII", hdr)
+        sec, usec, caplen, wirelen = struct.unpack(f"{self.endian}IIII", hdr)
         return (self.f.read(caplen)[:size],
                 RawPcapReader.PacketMetadata(sec=sec, usec=usec,
                                              wirelen=wirelen, caplen=caplen))
@@ -1432,7 +1408,7 @@ class RawPcapNgReader(RawPcapReader):
     def _read_block(self, size=MTU):
         # type: (int) -> Optional[Tuple[bytes, RawPcapNgReader.PacketMetadata]]  # noqa: E501
         try:
-            blocktype = struct.unpack(self.endian + "I", self.f.read(4))[0]
+            blocktype = struct.unpack(f"{self.endian}I", self.f.read(4))[0]
         except struct.error:
             raise EOFError
         if blocktype == 0x0A0D0D0A:
@@ -1440,7 +1416,7 @@ class RawPcapNgReader(RawPcapReader):
             self._read_block_shb()
             return None
         try:
-            blocklen = struct.unpack(self.endian + "I", self.f.read(4))[0]
+            blocklen = struct.unpack(f"{self.endian}I", self.f.read(4))[0]
         except struct.error:
             raise EOFError
         if blocklen < 12:
@@ -1460,8 +1436,7 @@ class RawPcapNgReader(RawPcapReader):
             warning("PcapNg: bad blocklen %d (MUST be a multiple of 4. "
                     "Ignored padding %r" % (blocklen, pad))
         try:
-            if blocklen != struct.unpack(self.endian + 'I',
-                                         self.f.read(4))[0]:
+            if blocklen != struct.unpack(f'{self.endian}I', self.f.read(4))[0]:
                 raise EOFError("PcapNg: Invalid pcapng block (bad blocklen)")
         except struct.error:
             raise EOFError
@@ -1478,7 +1453,7 @@ class RawPcapNgReader(RawPcapReader):
             warning("Bad magic in Section Header block (not a pcapng file?)")
             raise EOFError
 
-        blocklen = struct.unpack(self.endian + "I", _blocklen)[0]
+        blocklen = struct.unpack(f"{self.endian}I", _blocklen)[0]
         if blocklen < 16:
             warning("Invalid SHB block length!")
             raise EOFError
@@ -1503,7 +1478,7 @@ class RawPcapNgReader(RawPcapReader):
         """Section Header Block"""
         opts = self.default_options.copy()
         while len(options) >= 4:
-            code, length = struct.unpack(self.endian + "HH", options[:4])
+            code, length = struct.unpack(f"{self.endian}HH", options[:4])
             # PCAP Next Generation (pcapng) Capture File Format
             # 4.2. - Interface Description Block
             # http://xml2rfc.tools.ietf.org/cgi-bin/xml2rfc.cgi?url=https://raw.githubusercontent.com/pcapng/pcapng/master/draft-tuexen-opsawg-pcapng.xml&modeAsFormat=html/ascii&type=ascii#rfc.section.4.2
@@ -1528,10 +1503,10 @@ class RawPcapNgReader(RawPcapReader):
         # 4 bytes Snaplen
         options = self._read_options(block[8:-4])
         try:
-            interface = struct.unpack(  # type: ignore
-                self.endian + "HxxI",
-                block[:8]
-            ) + (options["tsresol"],)  # type: Tuple[int, int, int]
+            interface = struct.unpack(f"{self.endian}HxxI", block[:8]) + (
+                options["tsresol"],
+            )
+
         except struct.error:
             warning("PcapNg: IDB is too small %d/8 !" % len(block))
             raise EOFError
@@ -1550,9 +1525,9 @@ class RawPcapNgReader(RawPcapReader):
         """Enhanced Packet Block"""
         try:
             intid, tshigh, tslow, caplen, wirelen = struct.unpack(
-                self.endian + "5I",
-                block[:20],
+                f"{self.endian}5I", block[:20]
             )
+
         except struct.error:
             warning("PcapNg: EPB is too small %d/20 !" % len(block))
             raise EOFError
@@ -1575,7 +1550,7 @@ class RawPcapNgReader(RawPcapReader):
         self._check_interface_id(intid)
 
         try:
-            wirelen, = struct.unpack(self.endian + "I", block[:4])
+            wirelen, = struct.unpack(f"{self.endian}I", block[:4])
         except struct.error:
             warning("PcapNg: SPB is too small %d/4 !" % len(block))
             raise EOFError
@@ -1593,9 +1568,9 @@ class RawPcapNgReader(RawPcapReader):
         """(Obsolete) Packet Block"""
         try:
             intid, drops, tshigh, tslow, caplen, wirelen = struct.unpack(
-                self.endian + "HH4I",
-                block[:20],
+                f"{self.endian}HH4I", block[:20]
             )
+
         except struct.error:
             warning("PcapNg: PKT is too small %d/20 !" % len(block))
             raise EOFError
@@ -1614,10 +1589,7 @@ class RawPcapNgReader(RawPcapReader):
 
         # Parse the secrets type and length fields
         try:
-            secrets_type, secrets_length = struct.unpack(
-                self.endian + "II",
-                block[:8],
-            )
+            secrets_type, secrets_length = struct.unpack(f"{self.endian}II", block[:8])
             block = block[8:]
         except struct.error:
             warning("PcapNg: DSB is too small %d!", len(block))
@@ -1636,7 +1608,7 @@ class RawPcapNgReader(RawPcapReader):
 
         # TLS Key Log
         if secrets_type == 0x544c534b:
-            if getattr(conf, "tls_nss_keys", False) is False:
+            if not getattr(conf, "tls_nss_keys", False):
                 warning("PcapNg: TLS Key Log available, but "
                         "the TLS layer is not loaded! Scapy won't be able "
                         "to decrypt the packets.")
@@ -1649,14 +1621,13 @@ class RawPcapNgReader(RawPcapReader):
                     fd.write(secrets_data)
                     fd.close()
 
-                keys = load_nss_keys(filename)
-                if not keys:
-                    warning("PcapNg: invalid TLS Key Log in DSB!")
-                else:
+                if keys := load_nss_keys(filename):
                     # Note: these attributes are only available when the TLS
                     #       layer is loaded.
                     conf.tls_nss_keys = keys  # type: ignore
                     conf.tls_session_enable = True  # type: ignore
+                else:
+                    warning("PcapNg: invalid TLS Key Log in DSB!")
         else:
             warning("PcapNg: Unknown DSB secrets type (0x%x)!", secrets_type)
 
@@ -1738,10 +1709,7 @@ class RawPcapWriter:
         self.endian = endianness
         self.sync = sync
         self.nano = nano
-        bufsz = 4096
-        if sync:
-            bufsz = 0
-
+        bufsz = 0 if sync else 4096
         if isinstance(filename, str):
             self.filename = filename
             if gz:
@@ -1771,10 +1739,7 @@ class RawPcapWriter:
             # safest way to tell whether the header is already present
             # because we have to handle compressed streams that
             # are not as flexible as basic files
-            if self.gz:
-                g = gzip.open(self.filename, "rb")  # type: _ByteStream
-            else:
-                g = open(self.filename, "rb")
+            g = gzip.open(self.filename, "rb") if self.gz else open(self.filename, "rb")
             try:
                 if g.read(16):
                     return
@@ -1787,8 +1752,19 @@ class RawPcapWriter:
                 "Please pass a linktype while creating the writer"
             )
 
-        self.f.write(struct.pack(self.endian + "IHHIIII", 0xa1b23c4d if self.nano else 0xa1b2c3d4,  # noqa: E501
-                                 2, 4, 0, 0, self.snaplen, self.linktype))
+        self.f.write(
+            struct.pack(
+                f"{self.endian}IHHIIII",
+                0xA1B23C4D if self.nano else 0xA1B2C3D4,
+                2,
+                4,
+                0,
+                0,
+                self.snaplen,
+                self.linktype,
+            )
+        )
+
         self.f.flush()
 
     def write(self, pkt):
@@ -1870,16 +1846,15 @@ class RawPcapWriter:
             wirelen = caplen
         if sec is None or usec is None:
             t = time.time()
-            it = int(t)
             if sec is None:
+                it = int(t)
                 sec = it
                 usec = int(round((t - it) *
                                  (1000000000 if self.nano else 1000000)))
             elif usec is None:
                 usec = 0
 
-        self.f.write(struct.pack(self.endian + "IIII",
-                                 sec, usec, caplen, wirelen))
+        self.f.write(struct.pack(f"{self.endian}IIII", sec, usec, caplen, wirelen))
         self.f.write(packet)
         if self.sync:
             self.f.flush()
@@ -1954,20 +1929,18 @@ class PcapWriter(RawPcapWriter):
         :return: None
         :rtype: None
         """
-        if hasattr(packet, "time"):
-            if sec is None:
-                sec = int(packet.time)  # type: ignore
-                usec = int(round((packet.time - sec) *  # type: ignore
-                                 (1000000000 if self.nano else 1000000)))
+        if hasattr(packet, "time") and sec is None:
+            sec = int(packet.time)  # type: ignore
+            usec = int(round((packet.time - sec) *  # type: ignore
+                             (1000000000 if self.nano else 1000000)))
         if usec is None:
             usec = 0
 
         rawpkt = bytes_encode(packet)
         caplen = len(rawpkt) if caplen is None else caplen
 
-        if wirelen is None:
-            if hasattr(packet, "wirelen"):
-                wirelen = packet.wirelen  # type: ignore
+        if wirelen is None and hasattr(packet, "wirelen"):
+            wirelen = packet.wirelen  # type: ignore
         if wirelen is None:
             wirelen = caplen
 
@@ -1991,10 +1964,7 @@ def import_hexcap(input_string=None):
     re_extract_hexcap = re.compile(r"^((0x)?[0-9a-fA-F]{2,}[ :\t]{,3}|) *(([0-9a-fA-F]{2} {,2}){,16})")  # noqa: E501
     p = ""
     try:
-        if input_string:
-            input_function = six.StringIO(input_string).readline
-        else:
-            input_function = input
+        input_function = six.StringIO(input_string).readline if input_string else input
         while True:
             line = input_function().strip()
             if not line:

@@ -131,14 +131,19 @@ def _where(filename, dirs=None, env="PATH"):
                     for match in glob(os.path.join(path, filename))
                     if match)
     except (StopIteration, RuntimeError):
-        raise IOError("File not found: %s" % filename)
+        raise IOError(f"File not found: {filename}")
 
 
 def win_find_exe(filename, installsubdir=None, env="ProgramFiles"):
     """Find executable in current dir, system path or in the
     given ProgramFiles subdir, and retuen its absolute path.
     """
-    fns = [filename] if filename.endswith(".exe") else [filename + ".exe", filename]  # noqa: E501
+    fns = (
+        [filename]
+        if filename.endswith(".exe")
+        else [f"{filename}.exe", filename]
+    )
+
     for fn in fns:
         try:
             if installsubdir is None:
@@ -297,9 +302,7 @@ def _pcapname_to_guid(pcap_name):
     """Converts a Winpcap/Npcap pcpaname to its guid counterpart.
     e.g. \\DEVICE\\NPF_{...} => {...}
     """
-    if "{" in pcap_name:
-        return "{" + pcap_name.split("{")[1]
-    return pcap_name
+    return "{" + pcap_name.split("{")[1] if "{" in pcap_name else pcap_name
 
 
 class NetworkInterface_Win(NetworkInterface):
@@ -384,10 +387,7 @@ class NetworkInterface_Win(NetworkInterface):
         """Alias for setmode('monitor') or setmode('managed')
         Only available with Npcap"""
         # We must reset the monitor cache
-        if enable:
-            res = self.setmode('monitor')
-        else:
-            res = self.setmode('managed')
+        res = self.setmode('monitor') if enable else self.setmode('managed')
         if not res:
             log_runtime.error("Npcap WlanHelper returned with an error code !")
         self.cache_mode = None
@@ -509,9 +509,7 @@ class WindowsInterfacesProvider(InterfaceProvider):
 
     def _is_valid(self, dev):
         # Winpcap (and old Npcap) have no support for PCAP_IF_UP :(
-        if dev.flags == 0:
-            return True
-        return dev.flags & PCAP_IF_UP
+        return True if dev.flags == 0 else dev.flags & PCAP_IF_UP
 
     @classmethod
     def _pcap_check(cls):
@@ -538,18 +536,18 @@ class WindowsInterfacesProvider(InterfaceProvider):
                         return True
                     elif _confir in ["no", "n"]:
                         return False
+
         if _detect:
             # No action needed
             return
-        else:
-            log_interactive.warning(
-                "Scapy has detected that your pcap service is not running !"
-            )
-            if not conf.interactive or _ask_user():
-                succeed = pcap_service_start(askadmin=conf.interactive)
-                if succeed:
-                    log_loading.info("Pcap service started !")
-                    return
+        log_interactive.warning(
+            "Scapy has detected that your pcap service is not running !"
+        )
+        if not conf.interactive or _ask_user():
+            succeed = pcap_service_start(askadmin=conf.interactive)
+            if succeed:
+                log_loading.info("Pcap service started !")
+                return
         log_loading.warning(
             "Could not start the pcap service! "
             "You probably won't be able to send packets. "
@@ -563,7 +561,7 @@ class WindowsInterfacesProvider(InterfaceProvider):
             # Try a restart
             WindowsInterfacesProvider._pcap_check()
 
-        windows_interfaces = dict()
+        windows_interfaces = {}
         for i in get_windows_if_list():
             # Detect Loopback interface
             if "Loopback" in i['name']:
@@ -577,7 +575,7 @@ class WindowsInterfacesProvider(InterfaceProvider):
         for netw, if_data in six.iteritems(conf.cache_pcapiflist):
             name, ips, flags, _ = if_data
             guid = _pcapname_to_guid(netw)
-            data = windows_interfaces.get(guid, None)
+            data = windows_interfaces.get(guid)
             if data:
                 # Exists in Windows registry
                 data['network_name'] = netw
@@ -619,21 +617,16 @@ conf.ifaces.register_provider(WindowsInterfacesProvider)
 def get_ips(v6=False):
     """Returns all available IPs matching to interfaces, using the windows system.
     Should only be used as a WinPcapy fallback."""
-    res = {}
-    for iface in six.itervalues(conf.ifaces):
-        if v6:
-            res[iface] = iface.ips[6]
-        else:
-            res[iface] = iface.ips[4]
-    return res
+    return {
+        iface: iface.ips[6] if v6 else iface.ips[4]
+        for iface in six.itervalues(conf.ifaces)
+    }
 
 
 def get_if_raw_addr(iff):
     """Return the raw IPv4 address of interface"""
     iff = resolve_iface(iff)
-    if not iff.ip:
-        return None
-    return inet_pton(socket.AF_INET, iff.ip)
+    return inet_pton(socket.AF_INET, iff.ip) if iff.ip else None
 
 
 def get_ip_from_name(ifname, v6=False):
@@ -661,7 +654,7 @@ def pcap_service_status():
 
 def _pcap_service_control(action, askadmin=True):
     """Internal util to run pcap control command"""
-    command = action + ' ' + pcap_service_name()
+    command = f'{action} {pcap_service_name()}'
     res, code = _exec_cmd(_encapsulate_admin(command) if askadmin else command)
     if code != 0:
         warning(res.decode("utf8", errors="ignore"))
@@ -694,7 +687,7 @@ if conf.use_pcap:
         # Only check monitor mode when manually specified.
         # Checking/setting for monitor mode will slow down the process, and the
         # common is case is not to use monitor mode
-        kw_monitor = kargs.get("monitor", None)
+        kw_monitor = kargs.get("monitor")
         if conf.use_npcap and kw_monitor is not None:
             monitored = iface.ismonitor()
             if kw_monitor is not monitored:
@@ -718,9 +711,8 @@ def _read_routes_c_v1():
         return inet_ntop(socket.AF_INET, struct.pack("<I", obj))
 
     def _proc(ip):
-        if WINDOWS_XP:
-            return struct.unpack("<I", struct.pack(">I", ip))[0]
-        return ip
+        return struct.unpack("<I", struct.pack(">I", ip))[0] if WINDOWS_XP else ip
+
     routes = []
     for route in GetIpForwardTable():
         ifIndex = route['ForwardIfIndex']
@@ -792,10 +784,7 @@ def _read_routes_c(ipv6=False):
 def read_routes():
     routes = []
     try:
-        if WINDOWS_XP:
-            routes = _read_routes_c_v1()
-        else:
-            routes = _read_routes_c(ipv6=False)
+        routes = _read_routes_c_v1() if WINDOWS_XP else _read_routes_c(ipv6=False)
     except Exception as e:
         log_loading.warning("Error building scapy IPv4 routing table : %s", e)
     return routes
@@ -856,12 +845,8 @@ def _route_add_loopback(routes=None, ipv6=False, iflist=None):
         return
     warning("This will completely mess up the routes. Testing purpose only !")
     # Add only if some adapters already exist
-    if ipv6:
-        if not conf.route6.routes:
-            return
-    else:
-        if not conf.route.routes:
-            return
+    if ipv6 and not conf.route6.routes or not ipv6 and not conf.route.routes:
+        return
     conf.ifaces._add_fake_iface(conf.loopback_name)
     adapter = conf.ifaces.dev_from_name(conf.loopback_name)
     if iflist:
@@ -879,9 +864,11 @@ def _route_add_loopback(routes=None, ipv6=False, iflist=None):
     # Inject interface
     conf.ifaces["{0XX00000-X000-0X0X-X00X-00XXXX000XXX}"] = adapter
     conf.loopback_name = adapter.network_name
-    if isinstance(conf.iface, NetworkInterface):
-        if conf.iface.network_name == conf.loopback_name:
-            conf.iface = adapter
+    if (
+        isinstance(conf.iface, NetworkInterface)
+        and conf.iface.network_name == conf.loopback_name
+    ):
+        conf.iface = adapter
     conf.netcache.arp_cache["127.0.0.1"] = "ff:ff:ff:ff:ff:ff"
     conf.netcache.in6_neighbor["::1"] = "ff:ff:ff:ff:ff:ff"
     # Build the packed network addresses
@@ -899,12 +886,11 @@ def _route_add_loopback(routes=None, ipv6=False, iflist=None):
         # Flush the caches
         conf.route6.invalidate_cache()
         conf.route.invalidate_cache()
+    elif ipv6:
+        routes.append(loopback_route6)
+        routes.append(loopback_route6_custom)
     else:
-        if ipv6:
-            routes.append(loopback_route6)
-            routes.append(loopback_route6_custom)
-        else:
-            routes.append(loopback_route)
+        routes.append(loopback_route)
 
 
 class _NotAvailableSocket(SuperSocket):

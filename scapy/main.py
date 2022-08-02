@@ -177,8 +177,7 @@ def load_module(name, globals_dict=None, symb_list=None):
     available globally.
 
     """
-    _load("scapy.modules." + name,
-          globals_dict=globals_dict, symb_list=symb_list)
+    _load(f"scapy.modules.{name}", globals_dict=globals_dict, symb_list=symb_list)
 
 
 def load_layer(name, globals_dict=None, symb_list=None):
@@ -187,8 +186,11 @@ def load_layer(name, globals_dict=None, symb_list=None):
     available globally.
 
     """
-    _load("scapy.layers." + LAYER_ALIASES.get(name, name),
-          globals_dict=globals_dict, symb_list=symb_list)
+    _load(
+        f"scapy.layers.{LAYER_ALIASES.get(name, name)}",
+        globals_dict=globals_dict,
+        symb_list=symb_list,
+    )
 
 
 def load_contrib(name, globals_dict=None, symb_list=None):
@@ -201,9 +203,8 @@ def load_contrib(name, globals_dict=None, symb_list=None):
 
     """
     try:
-        importlib.import_module("scapy.contrib." + name)
-        _load("scapy.contrib." + name,
-              globals_dict=globals_dict, symb_list=symb_list)
+        importlib.import_module(f"scapy.contrib.{name}")
+        _load(f"scapy.contrib.{name}", globals_dict=globals_dict, symb_list=symb_list)
     except ImportError as e:
         # if layer not found in contrib, try in layers
         try:
@@ -276,10 +277,9 @@ def list_contrib(name=None,  # type: Optional[str]
     results.sort(key=lambda x: x["name"])
     if ret:
         return results
-    else:
-        for desc in results:
-            print("%(name)-20s: %(description)-40s status=%(status)s" % desc)
-        return None
+    for desc in results:
+        print("%(name)-20s: %(description)-40s status=%(status)s" % desc)
+    return None
 
 
 ##############################
@@ -321,8 +321,8 @@ def save_session(fname="", session=None, pickleProto=-1):
     from scapy.config import conf, ConfClass
     if not fname:
         fname = conf.session
-        if not fname:
-            conf.session = fname = utils.get_temp_file(keep=True)
+    if not fname:
+        conf.session = fname = utils.get_temp_file(keep=True)
     log_interactive.info("Saving session into [%s]", fname)
 
     if not session:
@@ -351,13 +351,12 @@ def save_session(fname="", session=None, pickleProto=-1):
         elif k in ignore or k in hard_ignore:
             del(to_be_saved[k])
         elif isinstance(i, (type, types.ModuleType)):
-            if k[0] != "_":
-                log_interactive.warning("[%s] (%s) can't be saved.", k,
-                                        type(to_be_saved[k]))
+            log_interactive.warning("[%s] (%s) can't be saved.", k,
+                                    type(to_be_saved[k]))
             del(to_be_saved[k])
 
     try:
-        os.rename(fname, fname + ".bak")
+        os.rename(fname, f"{fname}.bak")
     except OSError:
         pass
 
@@ -465,9 +464,7 @@ def init_session(session_name,  # type: Optional[Union[str, None]]
     if mydict is not None:
         six.moves.builtins.__dict__["scapy_session"].update(mydict)
         update_ipython_session(mydict)
-    if ret:
-        return SESSION
-    return None
+    return SESSION if ret else None
 
 ################
 #     Main     #
@@ -488,16 +485,17 @@ to be used in the fancy prompt.
     def _len(line):
         # type: (List[str]) -> int
         return sum(len(elt) for elt in line) + len(line) - 1
+
     while _quote:
         if not cur_line or (_len(cur_line) + len(_quote[0]) - 1 <= max_len):
             cur_line.append(_quote.pop(0))
             continue
-        lines.append('   | %s' % ' '.join(cur_line))
+        lines.append(f"   | {' '.join(cur_line)}")
         cur_line = []
     if cur_line:
-        lines.append('   | %s' % ' '.join(cur_line))
+        lines.append(f"   | {' '.join(cur_line)}")
         cur_line = []
-    lines.append('   | %s-- %s' % (" " * (max_len - len(author) - 5), author))
+    lines.append(f'   | {" " * (max_len - len(author) - 5)}-- {author}')
     return lines
 
 
@@ -547,9 +545,7 @@ def interact(mydict=None, argv=None, mybanner=None, loglevel=logging.INFO):
                 conf.logLevel = max(1, conf.logLevel - 10)
 
         if len(opts[1]) > 0:
-            raise getopt.GetoptError(
-                "Too many parameters : [%s]" % " ".join(opts[1])
-            )
+            raise getopt.GetoptError(f'Too many parameters : [{" ".join(opts[1])}]')
 
     except getopt.GetoptError as msg:
         log_loading.error(msg)
@@ -631,13 +627,14 @@ def interact(mydict=None, argv=None, mybanner=None, loglevel=logging.INFO):
             "",
             "   |",
             "   | Welcome to Scapy",
-            "   | Version %s" % conf.version,
+            f"   | Version {conf.version}",
             "   |",
             "   | https://github.com/secdev/scapy",
             "   |",
             "   | Have fun!",
             "   |",
         ]
+
 
         if mini_banner:
             the_logo = the_logo_mini
@@ -655,7 +652,7 @@ def interact(mydict=None, argv=None, mybanner=None, loglevel=logging.INFO):
             )
         )
     else:
-        banner_text = "Welcome to Scapy (%s)" % conf.version
+        banner_text = f"Welcome to Scapy ({conf.version})"
     if mybanner is not None:
         banner_text += "\n"
         banner_text += mybanner
@@ -691,8 +688,7 @@ def interact(mydict=None, argv=None, mybanner=None, loglevel=logging.INFO):
                 cfg.TerminalInteractiveShell.confirm_exit = False
                 cfg.TerminalInteractiveShell.separate_in = u''
             if int(IPython.__version__[0]) >= 6:
-                cfg.TerminalInteractiveShell.term_title_format = ("Scapy v%s" %
-                                                                  conf.version)
+                cfg.TerminalInteractiveShell.term_title_format = f"Scapy v{conf.version}"
                 # As of IPython 6-7, the jedi completion module is a dumpster
                 # of fire that should be scrapped never to be seen again.
                 cfg.Completer.use_jedi = False

@@ -119,14 +119,14 @@ class AnsweringMachine(Generic[_T]):
                 sendopt[k] = kargs[k]
             if k in self.sniff_options_list + self.send_options_list:
                 del kargs[k]
-        if mode != 2 or kargs:
+        if mode != 2:
             if mode == 1:
                 self.optam0 = kargs
-            elif mode == 2 and kargs:
-                k = self.optam0.copy()
-                k.update(kargs)
-                self.parse_options(**k)  # type: ignore
-                kargs = k
+            omode = self.__dict__.get("mode", 0)
+            self.__dict__["mode"] = mode
+            self.parse_options(**kargs)  # type: ignore
+            self.__dict__["mode"] = omode
+        elif kargs:
             omode = self.__dict__.get("mode", 0)
             self.__dict__["mode"] = mode
             self.parse_options(**kargs)  # type: ignore
@@ -148,10 +148,9 @@ class AnsweringMachine(Generic[_T]):
     def print_reply(self, req, reply):
         # type: (Packet, _T) -> None
         if isinstance(reply, PacketList):
-            print("%s ==> %s" % (req.summary(),
-                                 [res.summary() for res in reply]))
+            print(f"{req.summary()} ==> {[res.summary() for res in reply]}")
         else:
-            print("%s ==> %s" % (req.summary(), reply.summary()))
+            print(f"{req.summary()} ==> {reply.summary()}")
 
     def reply(self, pkt):
         # type: (Packet) -> None

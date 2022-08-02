@@ -72,7 +72,7 @@ class L3WinSocket(SuperSocket):
         from scapy.layers.inet import IP
         from scapy.layers.inet6 import IPv6
         for kwarg in kwargs:
-            warning("Dropping unsupported option: %s" % kwarg)
+            warning(f"Dropping unsupported option: {kwarg}")
         af = socket.AF_INET6 if ipv6 else socket.AF_INET
         self.proto = proto
         if ipv6:
@@ -117,7 +117,7 @@ class L3WinSocket(SuperSocket):
         self.outs.setsockopt(socket.IPPROTO_IP, socket.IP_TTL, ttl)
         # Bind on all ports
         iface = resolve_iface(iface) or conf.iface
-        host = iface.ip if iface.ip else socket.gethostname()
+        host = iface.ip or socket.gethostname()
         self.ins.bind((host, 0))
         self.ins.setblocking(False)
         # Get as much data as possible: reduce what is cropped
@@ -173,18 +173,17 @@ class L3WinSocket(SuperSocket):
             return None, None, None
         from scapy.layers.inet import IP
         from scapy.layers.inet6 import IPv6
-        if self.ipv6:
-            # AF_INET6 does not return the IPv6 header. Let's build it
-            # (host, port, flowinfo, scopeid)
-            host, _, flowinfo, _ = address
-            header = raw(IPv6(src=host,
-                              dst=self.host_ip6,
-                              fl=flowinfo,
-                              nh=self.proto,  # fixed for AF_INET6
-                              plen=len(data)))
-            return IPv6, header + data, time.time()
-        else:
+        if not self.ipv6:
             return IP, data, time.time()
+        # AF_INET6 does not return the IPv6 header. Let's build it
+        # (host, port, flowinfo, scopeid)
+        host, _, flowinfo, _ = address
+        header = raw(IPv6(src=host,
+                          dst=self.host_ip6,
+                          fl=flowinfo,
+                          nh=self.proto,  # fixed for AF_INET6
+                          plen=len(data)))
+        return IPv6, header + data, time.time()
 
     def close(self):
         if not self.closed and self.promisc:
@@ -208,10 +207,12 @@ def open_icmp_firewall(host):
     ICMP packets for a short period of time (~ 1 minute)"""
     # We call ping with a timeout of 1ms: will return instantly
     with open(os.devnull, 'wb') as DEVNULL:
-        return subprocess.Popen("ping -4 -w 1 -n 1 %s" % host,
-                                shell=True,
-                                stdout=DEVNULL,
-                                stderr=DEVNULL).wait()
+        return subprocess.Popen(
+            f"ping -4 -w 1 -n 1 {host}",
+            shell=True,
+            stdout=DEVNULL,
+            stderr=DEVNULL,
+        ).wait()
 
 
 def get_current_icmp_seq():

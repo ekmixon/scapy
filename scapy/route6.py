@@ -61,9 +61,7 @@ class Route6:
         #        if any. Change that ...
         self.invalidate_cache()
         self.routes = read_routes6()
-        self.ipv6_ifaces = set()
-        for route in self.routes:
-            self.ipv6_ifaces.add(route[3])
+        self.ipv6_ifaces = {route[3] for route in self.routes}
         if self.routes == []:
             log_loading.info("No IPv6 support in kernel")
 
@@ -128,7 +126,7 @@ class Route6:
         supporting IPv6.
         """
 
-        if not all(r[3] == iface for r in conf.route6.routes):
+        if any(r[3] != iface for r in conf.route6.routes):
             try:
                 self.ipv6_ifaces.remove(iface)
             except KeyError:
@@ -141,7 +139,7 @@ class Route6:
         delt(dst="2001:db8:cafe:f000::/56")
         delt(dst="2001:db8:cafe:f000::/56", gw="2001:db8:deca::1")
         """
-        tmp = dst + "/128"
+        tmp = f"{dst}/128"
         dst, plen_b = tmp.split('/')[:2]
         dst = in6_ptop(dst)
         plen = int(plen_b)
@@ -150,7 +148,7 @@ class Route6:
         if gw:
             gw = in6_ptop(gw)
             to_del = [x for x in self.routes if in6_ptop(x[2]) == gw]
-        if len(to_del) == 0:
+        if not to_del:
             warning("No matching route found")
         elif len(to_del) > 1:
             warning("Found more than one match. Aborting.")
@@ -186,10 +184,7 @@ class Route6:
     def ifdel(self, iff):
         # type: (str) -> None
         """ removes all route entries that uses 'iff' interface. """
-        new_routes = []
-        for rt in self.routes:
-            if rt[3] != iff:
-                new_routes.append(rt)
+        new_routes = [rt for rt in self.routes if rt[3] != iff]
         self.invalidate_cache()
         self.routes = new_routes
         self.remove_ipv6_iface(iff)
@@ -241,7 +236,7 @@ class Route6:
         dst = dst.replace("*", "0")
         idx = dst.find("-")
         while idx >= 0:
-            m = (dst[idx:] + ":").find(":")
+            m = f"{dst[idx:]}:".find(":")
             dst = dst[:idx] + dst[idx + m:]
             idx = dst.find("-")
 
@@ -283,7 +278,7 @@ class Route6:
         # Deal with dev-specific request for cache search
         k = dst
         if dev is not None:
-            k = dst + "%%" + dev
+            k = f"{dst}%%{dev}"
         if k in self.cache:
             return self.cache[k]
 
@@ -304,11 +299,10 @@ class Route6:
         if not paths:
             if dst == "::1":
                 return (conf.loopback_name, "::1", "::")
-            else:
-                if verbose:
-                    warning("No route found for IPv6 destination %s "
-                            "(no default route?)", dst)
-                return (conf.loopback_name, "::", "::")
+            if verbose:
+                warning("No route found for IPv6 destination %s "
+                        "(no default route?)", dst)
+            return (conf.loopback_name, "::", "::")
 
         # Sort with longest prefix first then use metrics as a tie-breaker
         paths.sort(key=lambda x: (-x[0], x[1]))
@@ -323,7 +317,7 @@ class Route6:
             if srcaddr is not None:
                 res.append((path[0], path[1], (tmp_c[0], srcaddr, tmp_c[2])))
 
-        if res == []:
+        if not res:
             warning("Found a route for IPv6 destination '%s', but no possible source address.", dst)  # noqa: E501
             return (conf.loopback_name, "::", "::")
 
@@ -352,7 +346,7 @@ class Route6:
         # Fill the cache (including dev-specific request)
         k = dst
         if dev is not None:
-            k = dst + "%%" + dev
+            k = f"{dst}%%{dev}"
         self.cache[k] = res[0][2]
 
         return res[0][2]

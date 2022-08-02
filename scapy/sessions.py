@@ -78,10 +78,7 @@ class DefaultSession(object):
     @property
     def count(self):
         # type: () -> int
-        if self._supersession:
-            return self._supersession.count
-        else:
-            return self.__count
+        return self._supersession.count if self._supersession else self.__count
 
     def toPacketList(self):
         # type: () -> PacketList
@@ -127,25 +124,24 @@ class IPSession(DefaultSession):
             return packet
         ip = packet[IP]
         packet._defrag_pos = 0
-        if ip.frag != 0 or ip.flags.MF:
-            uniq = (ip.id, ip.src, ip.dst, ip.proto)
-            self.fragments[uniq].append(packet)
-            if not ip.flags.MF:  # end of frag
-                try:
-                    if self.fragments[uniq][0].frag == 0:
-                        # Has first fragment (otherwise ignore)
-                        defrag = []  # type: List[Packet]
-                        _defrag_list(self.fragments[uniq], defrag, [])
-                        defragmented_packet = defrag[0]
-                        defragmented_packet = defragmented_packet.__class__(
-                            raw(defragmented_packet)
-                        )
-                        return defragmented_packet
-                finally:
-                    del self.fragments[uniq]
-            return None
-        else:
+        if ip.frag == 0 and not ip.flags.MF:
             return packet
+        uniq = (ip.id, ip.src, ip.dst, ip.proto)
+        self.fragments[uniq].append(packet)
+        if not ip.flags.MF:  # end of frag
+            try:
+                if self.fragments[uniq][0].frag == 0:
+                    # Has first fragment (otherwise ignore)
+                    defrag = []  # type: List[Packet]
+                    _defrag_list(self.fragments[uniq], defrag, [])
+                    defragmented_packet = defrag[0]
+                    defragmented_packet = defragmented_packet.__class__(
+                        raw(defragmented_packet)
+                    )
+                    return defragmented_packet
+            finally:
+                del self.fragments[uniq]
+        return None
 
     def on_packet_received(self, pkt):
         # type: (Optional[Packet]) -> None
@@ -319,12 +315,7 @@ class TCPSession(IPSession):
         # allow the parser to inspect TCP PSH flag
         if pkt[TCP].flags.P:
             metadata["tcp_psh"] = True
-        # XXX TODO: check that no empty space is missing in the buffer.
-        # XXX Currently, if a TCP fragment was missing, we won't notice it.
-        packet = None  # type: Optional[Packet]
-        if data.full():
-            # Reassemble using all previous packets
-            packet = tcp_reassemble(bytes(data), metadata)
+        packet = tcp_reassemble(bytes(data), metadata) if data.full() else None
         # Stack the result on top of the previous frames
         if packet:
             if "seq" in metadata:

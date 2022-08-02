@@ -77,7 +77,7 @@ class ConfClass(object):
                 r = " ".join(r.split())
                 wlen = 76 - max(len(i), 10)
                 if len(r) > wlen:
-                    r = r[:wlen - 3] + "..."
+                    r = f"{r[:wlen - 3]}..."
                 s += "%-10s = %s\n" % (i, r)
         return s[:-1]
 
@@ -92,7 +92,7 @@ class Interceptor(object):
                  ):
         # type: (...) -> None
         self.name = name
-        self.intname = "_intercepted_%s" % name
+        self.intname = f"_intercepted_{name}"
         self.default = default
         self.hook = hook
         self.args = args if args is not None else []
@@ -107,7 +107,7 @@ class Interceptor(object):
     @staticmethod
     def set_from_hook(obj, name, val):
         # type: (Conf, str, bool) -> None
-        int_name = "_intercepted_%s" % name
+        int_name = f"_intercepted_{name}"
         setattr(obj, int_name, val)
 
     def __set__(self, obj, val):
@@ -180,7 +180,7 @@ class ConfigFieldList:
 
     def __repr__(self):
         # type: () -> str
-        return "<%s [%s]>" % (self.__class__.__name__, " ".join(str(x) for x in self.fields))  # noqa: E501
+        return f'<{self.__class__.__name__} [{" ".join((str(x) for x in self.fields))}]>'
 
 
 class Emphasize(ConfigFieldList):
@@ -212,10 +212,7 @@ class Num2Layer:
 
     def __getitem__(self, item):
         # type: (Union[int, Type[Packet]]) -> Union[int, Type[Packet]]
-        if isinstance(item, int):
-            return self.num2layer[item]
-        else:
-            return self.layer2num[item]
+        return self.num2layer[item] if isinstance(item, int) else self.layer2num[item]
 
     def __contains__(self, item):
         # type: (Union[int, Type[Packet]]) -> bool
@@ -241,10 +238,12 @@ class Num2Layer:
                 dir = " ->"
             lst.append((num, "%#6x %s %-20s (%s)" % (num, dir, layer.__name__,
                                                      layer._name)))
-        for layer, num in six.iteritems(self.layer2num):
-            if num not in self.num2layer or self.num2layer[num] != layer:
-                lst.append((num, "%#6x <-  %-20s (%s)" % (num, layer.__name__,
-                                                          layer._name)))
+        lst.extend(
+            (num, "%#6x <-  %-20s (%s)" % (num, layer.__name__, layer._name))
+            for layer, num in six.iteritems(self.layer2num)
+            if num not in self.num2layer or self.num2layer[num] != layer
+        )
+
         lst.sort()
         return "\n".join(y for x, y in lst)
 
@@ -448,8 +447,7 @@ class CacheInstance(Dict[str, Any], object):
         if self:
             mk = max(len(k) for k in six.iterkeys(self.__dict__))
             fmt = "%%-%is %%s" % (mk + 1)
-            for item in six.iteritems(self.__dict__):
-                s.append(fmt % item)
+            s.extend(fmt % item for item in six.iteritems(self.__dict__))
         return "\n".join(s)
 
     def copy(self):
@@ -511,9 +509,9 @@ def _version_checker(module, minver):
     )
     if not version_tags_r:
         return False
-    version_tags_i = version_tags_r.group(1).split(".")
+    version_tags_i = version_tags_r[1].split(".")
     version_tags = tuple(int(x) for x in version_tags_i)
-    return bool(version_tags >= minver)
+    return version_tags >= minver
 
 
 def isCryptographyValid():

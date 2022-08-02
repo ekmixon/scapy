@@ -66,10 +66,7 @@ def _struct_to_dict(struct_obj):
             results[fname] = _struct_to_dict(val)
         elif val and hasattr(val, "contents"):
             # Let's resolve recursive pointers
-            if hasattr(val.contents, "next"):
-                results[fname] = _resolve_list(val)
-            else:
-                results[fname] = val
+            results[fname] = _resolve_list(val) if hasattr(val.contents, "next") else val
         else:
             results[fname] = val
     return results
@@ -86,7 +83,7 @@ def _windows_title(title=None):
     """Updates the terminal title with the default one or with `title`
     if provided."""
     if conf.interactive:
-        _winapi_SetConsoleTitle(title or "Scapy v{}".format(conf.version))
+        _winapi_SetConsoleTitle(title or f"Scapy v{conf.version}")
 
 
 SC_HANDLE = HANDLE
@@ -509,9 +506,11 @@ def GetIpForwardTable():
     res = _GetIpForwardTable(pIpForwardTable, byref(size), True)
     if res != NO_ERROR:
         raise RuntimeError("Error retrieving table (%d)" % res)
-    results = []
-    for i in range(pIpForwardTable.contents.NumEntries):
-        results.append(_struct_to_dict(pIpForwardTable.contents.Table[i]))
+    results = [
+        _struct_to_dict(pIpForwardTable.contents.Table[i])
+        for i in range(pIpForwardTable.contents.NumEntries)
+    ]
+
     del(pIpForwardTable)
     return results
 
@@ -579,8 +578,10 @@ def GetIpForwardTable2(AF=AF_UNSPEC):
     res = _GetIpForwardTable2(AF, byref(table))
     if res != NO_ERROR:
         raise RuntimeError("Error retrieving table (%d)" % res)
-    results = []
-    for i in range(table.contents.NumEntries):
-        results.append(_struct_to_dict(table.contents.Table[i]))
+    results = [
+        _struct_to_dict(table.contents.Table[i])
+        for i in range(table.contents.NumEntries)
+    ]
+
     _FreeMibTable(table)
     return results

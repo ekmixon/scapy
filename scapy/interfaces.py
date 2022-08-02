@@ -153,9 +153,7 @@ class NetworkInterface(object):
 
     def is_valid(self):
         # type: () -> bool
-        if self.dummy:
-            return False
-        return self.provider._is_valid(self)
+        return False if self.dummy else self.provider._is_valid(self)
 
     def l2socket(self):
         # type: () -> Type[scapy.supersocket.SuperSocket]
@@ -171,9 +169,7 @@ class NetworkInterface(object):
 
     def __repr__(self):
         # type: () -> str
-        return "<%s %s [%s]>" % (self.__class__.__name__,
-                                 self.description,
-                                 self.dummy and "dummy" or (self.flags or ""))
+        return f'<{self.__class__.__name__} {self.description} [{self.dummy and "dummy" or (self.flags or "")}]>'
 
     def __str__(self):
         # type: () -> str
@@ -205,11 +201,7 @@ class NetworkInterfaceDict(UserDict):
               ):
         # type: (...) -> None
         for ifname, iface in six.iteritems(dat):
-            if ifname in self.data:
-                # Handle priorities: keep except if libpcap
-                if prov.libpcap:
-                    self.data[ifname] = iface
-            else:
+            if ifname in self.data and prov.libpcap or ifname not in self.data:
                 self.data[ifname] = iface
 
     def register_provider(self, provider):
@@ -322,19 +314,23 @@ class NetworkInterfaceDict(UserDict):
             res[prov].append(
                 (prov.name,) + prov._format(dev, **kwargs)
             )
-        output = ""
-        for provider in res:
-            output += pretty_list(
-                res[provider],
-                [("Source",) + provider.headers],
-                sortBy=provider.header_sort
-            ) + "\n"
+        output = "".join(
+            (
+                pretty_list(
+                    value,
+                    [("Source",) + provider.headers],
+                    sortBy=provider.header_sort,
+                )
+                + "\n"
+            )
+            for provider, value in res.items()
+        )
+
         output = output[:-1]
-        if print_result:
-            print(output)
-            return None
-        else:
+        if not print_result:
             return output
+        print(output)
+        return None
 
     def __repr__(self):
         # type: () -> str

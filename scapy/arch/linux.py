@@ -145,11 +145,9 @@ def _get_if_list():
             pass
         log_loading.critical("Can't open /proc/net/dev !")
         return []
-    lst = []
     f.readline()
     f.readline()
-    for line in f:
-        lst.append(plain_str(line).split(":")[0].strip())
+    lst = [plain_str(line).split(":")[0].strip() for line in f]
     f.close()
     return lst
 
@@ -179,10 +177,7 @@ def attach_filter(sock, bpf_filter, iface):
 def set_promisc(s, iff, val=1):
     # type: (socket.socket, Union[NetworkInterface, str], int) -> None
     mreq = struct.pack("IHH8s", get_if_index(iff), PACKET_MR_PROMISC, 0, b"")
-    if val:
-        cmd = PACKET_ADD_MEMBERSHIP
-    else:
-        cmd = PACKET_DROP_MEMBERSHIP
+    cmd = PACKET_ADD_MEMBERSHIP if val else PACKET_DROP_MEMBERSHIP
     s.setsockopt(SOL_PACKET, cmd, mreq)
 
 
@@ -197,11 +192,7 @@ def get_alias_address(iface_name,  # type: str
     """
 
     # Detect the architecture
-    if scapy.consts.IS_64BITS:
-        offset, name_len = 16, 40
-    else:
-        offset, name_len = 32, 32
-
+    offset, name_len = (16, 40) if scapy.consts.IS_64BITS else (32, 32)
     # Retrieve interfaces structures
     sck = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     names_ar = array.array('B', b'\0' * 4096)
@@ -264,9 +255,12 @@ def read_routes():
             warning("Interface %s: unknown address family (%i)" % (conf.loopback_name, addrfamily))  # noqa: E501
     except IOError as err:
         if err.errno == 99:
-            warning("Interface %s: no address assigned" % conf.loopback_name)  # noqa: E501
+            warning(f"Interface {conf.loopback_name}: no address assigned")
         else:
-            warning("Interface %s: failed to get address config (%s)" % (conf.loopback_name, str(err)))  # noqa: E501
+            warning(
+                f"Interface {conf.loopback_name}: failed to get address config ({str(err)})"
+            )
+
 
     for line_b in f.readlines()[1:]:
         line = plain_str(line_b)
@@ -298,8 +292,7 @@ def read_routes():
 
         route = (dst_int, msk_int, gw_str, iff, ifaddr, metric)
         if ifaddr_int & msk_int != dst_int:
-            tmp_route = get_alias_address(iff, dst_int, gw_str, metric)
-            if tmp_route:
+            if tmp_route := get_alias_address(iff, dst_int, gw_str, metric):
                 route = tmp_route
         routes.append(route)
 
@@ -493,9 +486,9 @@ class L2Socket(SuperSocket):
         if not nofilter:
             if conf.except_filter:
                 if filter:
-                    filter = "(%s) and not (%s)" % (filter, conf.except_filter)
+                    filter = f"({filter}) and not ({conf.except_filter})"
                 else:
-                    filter = "not (%s)" % conf.except_filter
+                    filter = f"not ({conf.except_filter})"
             if filter is not None:
                 try:
                     attach_filter(self.ins, filter, self.iface)
@@ -628,10 +621,7 @@ class L3PacketSocket(L2Socket):
                     sx + b"\x00" * (conf.min_pkt_size - len(sx))
                 )
             elif conf.auto_fragment and msg.errno == 90:
-                i = 0
-                for p in x.fragment():
-                    i += self.outs.sendto(raw(ll(p)), sdto)
-                return i
+                return sum(self.outs.sendto(raw(ll(p)), sdto) for p in x.fragment())
             else:
                 raise
 

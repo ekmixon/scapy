@@ -20,12 +20,11 @@ def generate_rest_table(items):
     Generates a ReST table from a list of tuples
     """
     lengths = [max(len(y) for y in x) for x in zip(*items)]
-    sep = "+%s+" % "+".join("-" * x for x in lengths)
+    sep = f'+{"+".join(("-" * x for x in lengths))}+'
     sized = "|%s|" % "|".join("{:%ss}" % x for x in lengths)
     output = []
     for i in items:
-        output.append(sep)
-        output.append(sized.format(*i))
+        output.extend((sep, sized.format(*i)))
     output.append(sep)
     return output
 
@@ -36,16 +35,14 @@ def tab(items):
     """
     for i in items:
         # Tabs are 3-wide in autodoc
-        yield "   " + i
+        yield f"   {i}"
 
 
 def class_ref(cls):
     """
     Get Sphinx reference to a class
     """
-    return ":class:`~%s`" % (
-        cls.__module__ + '.' + cls.__name__
-    )
+    return f":class:`~{cls.__module__}.{cls.__name__}`"
 
 
 def get_fields_desc(obj):
@@ -57,11 +54,12 @@ def get_fields_desc(obj):
         fname, cls, clsne, dflt, long_attrs = value
         output.append(
             (
-                "**%s**" % fname,
-                class_ref(cls) + ((" " + clsne) if clsne else ""),
-                "``%s``" % dflt
+                f"**{fname}**",
+                class_ref(cls) + (f" {clsne}" if clsne else ""),
+                f"``{dflt}``",
             )
         )
+
     if output:
         output = list(
             tab(
@@ -69,7 +67,7 @@ def get_fields_desc(obj):
             )
         )
         # Add header
-        output.insert(0, ".. table:: %s fields" % obj.__name__)
+        output.insert(0, f".. table:: {obj.__name__} fields")
         output.insert(1, "   :widths: grid")
         output.insert(2, "   ")
         # Add RFC-like graph
@@ -80,9 +78,8 @@ def get_fields_desc(obj):
         s = "Display RFC-like schema"
         graph.insert(0, ".. raw:: html")
         graph.insert(1, "")
-        graph.insert(2, "   <details><summary>%s</summary><code><pre>" % s)
-        graph.append("   </pre></code></details>")
-        graph.append("")
+        graph.insert(2, f"   <details><summary>{s}</summary><code><pre>")
+        graph.extend(("   </pre></code></details>", ""))
         return graph + output
     return output
 
@@ -99,6 +96,7 @@ class AttrsDocumenter(AttributeDocumenter):
             super(AttributeDocumenter, self).add_directive_header(
                 *args, **kwargs
             )
+
         sourcename = self.get_sourcename()
         # Custom additions
         if issubclass(self.parent, Packet):
@@ -116,7 +114,7 @@ class AttrsDocumenter(AttributeDocumenter):
             elif self.object_name == "payload_guess":
                 # Display list of possible children
                 call_parent()
-                children = sorted(set(class_ref(x[1]) for x in self.object))
+                children = sorted({class_ref(x[1]) for x in self.object})
                 if children:
                     lines = [
                         "",

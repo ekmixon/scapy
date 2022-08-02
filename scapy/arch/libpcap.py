@@ -79,9 +79,7 @@ class _L2libpcapSocket(SuperSocket):
                 )
 
         ts, pkt = self.ins.next()
-        if pkt is None:
-            return None, None, None
-        return self.cls, pkt, ts
+        return (None, None, None) if pkt is None else (self.cls, pkt, ts)
 
     def nonblock_recv(self):
         """Receives and dissect a packet in non-blocking mode."""
@@ -234,8 +232,8 @@ if conf.use_pcap:
                     raise OSError("On Windows, this feature requires NPcap !")
                 # Npcap-only functions
                 from scapy.libs.winpcapy import pcap_create, \
-                    pcap_set_snaplen, pcap_set_promisc, \
-                    pcap_set_timeout, pcap_set_rfmon, pcap_activate
+                            pcap_set_snaplen, pcap_set_promisc, \
+                            pcap_set_timeout, pcap_set_rfmon, pcap_activate
                 self.pcap = pcap_create(self.iface, self.errbuf)
                 pcap_set_snaplen(self.pcap, snaplen)
                 pcap_set_promisc(self.pcap, promisc)
@@ -248,8 +246,7 @@ if conf.use_pcap:
                 self.pcap = pcap_open_live(self.iface,
                                            snaplen, promisc, to_ms,
                                            self.errbuf)
-                error = bytes(bytearray(self.errbuf)).strip(b"\x00")
-                if error:
+                if error := bytes(bytearray(self.errbuf)).strip(b"\x00"):
                     raise OSError(error)
 
             if WINDOWS:
@@ -271,7 +268,7 @@ if conf.use_pcap:
                 byref(self.header),
                 byref(self.pkt_data)
             )
-            if not c > 0:
+            if c <= 0:
                 return None, None
             ts = self.header.contents.ts.tv_sec + float(self.header.contents.ts.tv_usec) / 1e6  # noqa: E501
             pkt = bytes(bytearray(self.pkt_data[:self.header.contents.len]))
@@ -381,9 +378,9 @@ if conf.use_pcap:
             if type == ETH_P_ALL:  # Do not apply any filter if Ethernet type is given  # noqa: E501
                 if conf.except_filter:
                     if filter:
-                        filter = "(%s) and not (%s)" % (filter, conf.except_filter)  # noqa: E501
+                        filter = f"({filter}) and not ({conf.except_filter})"
                     else:
-                        filter = "not (%s)" % conf.except_filter
+                        filter = f"not ({conf.except_filter})"
                 if filter:
                     self.ins.setfilter(filter)
 
@@ -410,16 +407,13 @@ if conf.use_pcap:
             except Exception:
                 pass
             if nofilter:
-                if type != ETH_P_ALL:  # PF_PACKET stuff. Need to emulate this for pcap  # noqa: E501
-                    filter = "ether proto %i" % type
-                else:
-                    filter = None
+                filter = "ether proto %i" % type if type != ETH_P_ALL else None
             else:
                 if conf.except_filter:
                     if filter:
-                        filter = "(%s) and not (%s)" % (filter, conf.except_filter)  # noqa: E501
+                        filter = f"({filter}) and not ({conf.except_filter})"
                     else:
-                        filter = "not (%s)" % conf.except_filter
+                        filter = f"not ({conf.except_filter})"
                 if type != ETH_P_ALL:  # PF_PACKET stuff. Need to emulate this for pcap  # noqa: E501
                     if filter:
                         filter = "(ether proto %i) and (%s)" % (type, filter)

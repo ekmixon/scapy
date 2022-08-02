@@ -84,17 +84,11 @@ def linkcode_resolve(domain, info):
         source, lineno = inspect.getsourcelines(obj)
     except Exception:
         lineno = None
-    
+
     fn = os.path.relpath(fn, start=os.path.dirname(scapy.__file__))
 
-    if lineno:
-        linespec = "#L%d-L%d" % (lineno, lineno + len(source) - 1)
-    else:
-        linespec = ""
-
+    linespec = "#L%d-L%d" % (lineno, lineno + len(source) - 1) if lineno else ""
     if 'dev' in scapy.__version__:
-        return "https://github.com/secdev/scapy/blob/master/scapy/%s%s" % (
-           fn, linespec)
+        return f"https://github.com/secdev/scapy/blob/master/scapy/{fn}{linespec}"
     else:
-        return "https://github.com/secdev/scapy/blob/v%s/scapy/%s%s" % (
-           scapy.__version__, fn, linespec)
+        return f"https://github.com/secdev/scapy/blob/v{scapy.__version__}/scapy/{fn}{linespec}"

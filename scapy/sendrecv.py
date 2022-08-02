@@ -146,11 +146,7 @@ class SndRcvHandler(object):
         self.noans = 0
         self._flood = _flood
         # Instantiate packet holders
-        if prebuild and not self._flood:
-            self.tobesent = list(pkt)  # type: _PacketIterable
-        else:
-            self.tobesent = pkt
-
+        self.tobesent = list(pkt) if prebuild and not self._flood else pkt
         if retry < 0:
             autostop = retry = -retry
         else:
@@ -189,12 +185,11 @@ class SndRcvHandler(object):
             else:
                 remain = list(itertools.chain(*six.itervalues(self.hsent)))
 
-            if autostop and len(remain) > 0 and \
-               len(remain) != len(self.tobesent):
+            if autostop and remain and len(remain) != len(self.tobesent):
                 retry = autostop
 
             self.tobesent = remain
-            if len(self.tobesent) == 0:
+            if not self.tobesent:
                 break
             retry -= 1
 
@@ -250,7 +245,7 @@ class SndRcvHandler(object):
         finally:
             try:
                 cast(Packet, self.tobesent).sent_time = \
-                    cast(Packet, p).sent_time
+                        cast(Packet, p).sent_time
             except AttributeError:
                 pass
             if self._flood:
@@ -282,9 +277,13 @@ class SndRcvHandler(object):
                             self.noans += 1
                         sentpkt._answered = 1
                     break
-        if self._send_done and self.noans >= self.notans and not self.multi:
-            if self.sniffer:
-                self.sniffer.stop(join=False)
+        if (
+            self._send_done
+            and self.noans >= self.notans
+            and not self.multi
+            and self.sniffer
+        ):
+            self.sniffer.stop(join=False)
         if not ok:
             if self.verbose > 1:
                 os.write(1, b".")
@@ -502,7 +501,7 @@ def sendpfast(x,  # type: _PacketIterable
     """
     if iface is None:
         iface = conf.iface
-    argv = [conf.prog.tcpreplay, "--intf1=%s" % network_name(iface)]
+    argv = [conf.prog.tcpreplay, f"--intf1={network_name(iface)}"]
     if pps is not None:
         argv.append("--pps=%i" % pps)
     elif mbps is not None:
@@ -592,7 +591,7 @@ def _parse_tcpreplay_result(stdout_b, stderr_b, argv):
                     for i, typ in enumerate(_types):
                         name = multi.get(elt, [elt])[i]
                         if matches:
-                            results[name] = typ(matches.group(i + 1))
+                            results[name] = typ(matches[i + 1])
         results["command"] = " ".join(argv)
         results["warnings"] = stderr[:-1]
         return results
@@ -659,9 +658,7 @@ def sr1(x,  # type: _PacketIterable
                       nofilter=nofilter, iface=iface)
     ans, _ = sndrcv(s, x, *args, **kargs)
     s.close()
-    if len(ans) > 0:
-        return cast(Packet, ans[0][1])
-    return None
+    return cast(Packet, ans[0][1]) if len(ans) > 0 else None
 
 
 @conf.commands.register
@@ -696,9 +693,7 @@ def srp1(*args, **kargs):
     Send and receive packets at layer 2 and return only the first answer
     """
     ans, _ = srp(*args, **kargs)
-    if len(ans) > 0:
-        return cast(Packet, ans[0][1])
-    return None
+    return cast(Packet, ans[0][1]) if len(ans) > 0 else None
 
 
 # Append doc
@@ -759,7 +754,7 @@ def __sr_loop(srfunc,  # type: Callable[..., Tuple[SndRcvList, PacketList]]
                 for p in res[1]:
                     print(col(prnfail(p)))
                     print(" " * len(msg), end=' ')
-            if verbose > 1 and not (prn or prnfail):
+            if verbose > 1 and not prn and not prnfail:
                 print("recv:%i  fail:%i" % tuple(map(len, res[:2])))
             if store:
                 ans += res[0]
@@ -909,9 +904,7 @@ def sr1flood(x,  # type: _PacketIterable
     s = iface.l3socket()(promisc=promisc, filter=filter, nofilter=nofilter, iface=iface)  # noqa: E501
     ans, _ = sndrcvflood(s, x, *args, **kargs)
     s.close()
-    if len(ans) > 0:
-        return cast(Packet, ans[0][1])
-    return None
+    return cast(Packet, ans[0][1]) if len(ans) > 0 else None
 
 
 @conf.commands.register
@@ -964,9 +957,7 @@ def srp1flood(x,  # type: _PacketIterable
     s = iface.l2socket()(promisc=promisc, filter=filter, nofilter=nofilter, iface=iface)  # noqa: E501
     ans, _ = sndrcvflood(s, x, *args, **kargs)
     s.close()
-    if len(ans) > 0:
-        return cast(Packet, ans[0][1])
-    return None
+    return cast(Packet, ans[0][1]) if len(ans) > 0 else None
 
 # SNIFF METHODS
 
@@ -1104,7 +1095,7 @@ class AsyncSniffer(object):
                 # Single file
                 offline = [offline]
             if isinstance(offline, list) and \
-                    all(isinstance(elt, str) for elt in offline):
+                        all(isinstance(elt, str) for elt in offline):
                 # List of files
                 sniff_sockets.update((PcapReader(
                     fname if flt is None else
@@ -1169,7 +1160,7 @@ class AsyncSniffer(object):
         select_func = _main_socket.select
         nonblocking_socket = _main_socket.nonblocking_socket
         # We check that all sockets use the same select(), or raise a warning
-        if not all(select_func == sock.select for sock in sniff_sockets):
+        if any(select_func != sock.select for sock in sniff_sockets):
             warning("Warning: inconsistent socket types ! "
                     "The used select function "
                     "will be the one of the first socket")
@@ -1247,7 +1238,7 @@ class AsyncSniffer(object):
                     session.on_packet_received(p)
                     # check
                     if (stop_filter and stop_filter(p)) or \
-                            (0 < count <= session.count):
+                                (0 < count <= session.count):
                         self.continue_sniff = False
                         break
                 # Removed dead sockets
@@ -1273,19 +1264,18 @@ class AsyncSniffer(object):
     def stop(self, join=True):
         # type: (bool) -> Optional[PacketList]
         """Stops AsyncSniffer if not in async mode"""
-        if self.running:
-            try:
-                self.stop_cb()
-            except AttributeError:
-                raise Scapy_Exception(
-                    "Unsupported (offline or unsupported socket)"
-                )
-            if join:
-                self.join()
-                return self.results
-            return None
-        else:
+        if not self.running:
             raise Scapy_Exception("Not running ! (check .running attr)")
+        try:
+            self.stop_cb()
+        except AttributeError:
+            raise Scapy_Exception(
+                "Unsupported (offline or unsupported socket)"
+            )
+        if join:
+            self.join()
+            return self.results
+        return None
 
     def join(self, *args, **kwargs):
         # type: (*Any, **Any) -> None
@@ -1338,17 +1328,16 @@ def bridge_and_sniff(if1,  # type: _GlobInterfaceType
             del kargs[arg]
 
     def _init_socket(iface,  # type: _GlobInterfaceType
-                     count,  # type: int
-                     L2socket=L2socket  # type: Optional[Type[SuperSocket]]
-                     ):
-        # type: (...) -> Tuple[SuperSocket, _GlobInterfaceType]
+                         count,  # type: int
+                         L2socket=L2socket  # type: Optional[Type[SuperSocket]]
+                         ):
         if isinstance(iface, SuperSocket):
             return iface, "iface%d" % count
-        else:
-            if not L2socket:
-                iface = resolve_iface(iface or conf.iface)
-                L2socket = iface.l2socket()
-            return L2socket(iface=iface), iface
+        if not L2socket:
+            iface = resolve_iface(iface or conf.iface)
+            L2socket = iface.l2socket()
+        return L2socket(iface=iface), iface
+
     sckt1, if1 = _init_socket(if1, 1)
     sckt2, if2 = _init_socket(if2, 2)
     peers = {if1: sckt2, if2: sckt1}
@@ -1388,6 +1377,7 @@ def bridge_and_sniff(if1,  # type: _GlobInterfaceType
         except Exception:
             log_runtime.warning('Cannot forward packet [%s] received on %s',
                                 pkt.summary(), pkt.sniffed_on, exc_info=True)
+
     if prn is None:
         prn = prn_send
     else:

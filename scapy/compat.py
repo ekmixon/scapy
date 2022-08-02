@@ -7,6 +7,7 @@
 Python 2 and 3 link classes.
 """
 
+
 from __future__ import absolute_import
 import base64
 import binascii
@@ -81,7 +82,7 @@ __all__ = [
 try:
     import typing  # noqa: F401
     from typing import TYPE_CHECKING
-    if sys.version_info[0:2] <= (3, 6):
+    if sys.version_info[:2] <= (3, 6):
         # Generic is messed up before Python 3.7
         # https://github.com/python/typing/issues/449
         raise ImportError
@@ -94,7 +95,10 @@ except ImportError:
 
 
 def _FakeType(name, cls=object):
-    # type: (str, Optional[type]) -> Any
+# type: (str, Optional[type]) -> Any
+
+
+
     class _FT(object):
         def __init__(self, name):
             # type: (str) -> None
@@ -112,7 +116,9 @@ def _FakeType(name, cls=object):
 
         def __repr__(self):
             # type: () -> str
-            return "<Fake typing.%s>" % self.name
+            return f"<Fake typing.{self.name}>"
+
+
     return _FT(name)
 
 
@@ -260,9 +266,7 @@ if six.PY2:
 
     def chb(x):
         # type: (int) -> bytes
-        if isinstance(x, str):
-            return x
-        return chr(x)
+        return x if isinstance(x, str) else chr(x)
 
     def raw(x):
         # type: (Union[Packet]) -> bytes
@@ -270,9 +274,7 @@ if six.PY2:
         Builds a packet and returns its bytes representation.
         This function is and will always be cross-version compatible
         """
-        if hasattr(x, "__bytes__"):
-            return x.__bytes__()
-        return bytes(x)
+        return x.__bytes__() if hasattr(x, "__bytes__") else bytes(x)
 else:
     def raw(x):
         # type: (Union[Packet]) -> bytes
@@ -287,25 +289,19 @@ else:
         """Ensure that the given object is bytes.
         If the parameter is a packet, raw() should be preferred.
         """
-        if isinstance(x, str):
-            return x.encode()
-        return bytes(x)
+        return x.encode() if isinstance(x, str) else bytes(x)
 
     if sys.version_info[0:2] <= (3, 4):
         def plain_str(x):
             # type: (AnyStr) -> str
             """Convert basic byte objects to str"""
-            if isinstance(x, bytes):
-                return x.decode(errors="ignore")
-            return str(x)
+            return x.decode(errors="ignore") if isinstance(x, bytes) else str(x)
     else:
         # Python 3.5+
         def plain_str(x):
             # type: (Any) -> str
             """Convert basic byte objects to str"""
-            if isinstance(x, bytes):
-                return x.decode(errors="backslashreplace")
-            return str(x)
+            return x.decode(errors="backslashreplace") if isinstance(x, bytes) else str(x)
 
     def chb(x):
         # type: (int) -> bytes
@@ -315,9 +311,7 @@ else:
     def orb(x):
         # type: (Union[int, str, bytes]) -> int
         """Return ord(x) when not already an int."""
-        if isinstance(x, int):
-            return x
-        return ord(x)
+        return x if isinstance(x, int) else ord(x)
 
 
 def bytes_hex(x):

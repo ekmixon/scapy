@@ -50,11 +50,7 @@ class _L2bpfSocket(SuperSocket):
         self.assigned_interface = None
 
         # SuperSocket mandatory variables
-        if promisc is None:
-            self.promisc = conf.sniff_promisc
-        else:
-            self.promisc = promisc
-
+        self.promisc = conf.sniff_promisc if promisc is None else promisc
         self.iface = network_name(iface or conf.iface)
 
         # Get the BPF handle
@@ -73,7 +69,7 @@ class _L2bpfSocket(SuperSocket):
         try:
             fcntl.ioctl(self.ins, BIOCSETIF, struct.pack("16s16x", self.iface.encode()))  # noqa: E501
         except IOError:
-            raise Scapy_Exception("BIOCSETIF failed on %s" % self.iface)
+            raise Scapy_Exception(f"BIOCSETIF failed on {self.iface}")
         self.assigned_interface = self.iface
 
         # Set the interface into promiscuous
@@ -126,16 +122,16 @@ class _L2bpfSocket(SuperSocket):
         if not nofilter:
             if conf.except_filter:
                 if filter:
-                    filter = "(%s) and not (%s)" % (filter, conf.except_filter)
+                    filter = f"({filter}) and not ({conf.except_filter})"
                 else:
-                    filter = "not (%s)" % conf.except_filter
+                    filter = f"not ({conf.except_filter})"
             if filter is not None:
                 try:
                     attach_filter(self.ins, filter, self.iface)
                     filter_attached = True
                 except ImportError as ex:
-                    warning("Cannot set filter: %s" % ex)
-        if NETBSD and filter_attached is False:
+                    warning(f"Cannot set filter: {ex}")
+        if NETBSD and not filter_attached:
             # On NetBSD, a filter must be attached to an interface, otherwise
             # no frame will be received by os.read(). When no filter has been
             # configured, Scapy uses a simple tcpdump filter that does nothing
@@ -144,7 +140,7 @@ class _L2bpfSocket(SuperSocket):
             try:
                 attach_filter(self.ins, filter, self.iface)
             except ImportError as ex:
-                warning("Cannot set filter: %s" % ex)
+                warning(f"Cannot set filter: {ex}")
 
         # Set the guessed packet class
         self.guessed_cls = self.guess_cls()
@@ -295,26 +291,12 @@ class L2bpfListenSocket(_L2bpfSocket):
             return
 
         # Extract useful information from the BPF header
-        if FREEBSD:
-            # Unless we set BIOCSTSTAMP to something different than
-            # BPF_T_MICROTIME, we will get bpf_hdr on FreeBSD, which means
-            # that we'll get a struct timeval, which is time_t, suseconds_t.
-            # On i386 time_t is 32bit so the bh_tstamp will only be 8 bytes.
-            # We really want to set BIOCSTSTAMP to BPF_T_NANOTIME and be
-            # done with this and it always be 16?
-            if platform.machine() == "i386":
-                # struct bpf_hdr
-                bh_tstamp_offset = 8
-            else:
-                # struct bpf_hdr (64bit time_t) or struct bpf_xhdr
-                bh_tstamp_offset = 16
-        elif NETBSD:
-            # struct bpf_hdr or struct bpf_hdr32
-            bh_tstamp_offset = 16
-        else:
+        if FREEBSD and platform.machine() == "i386" or not FREEBSD and not NETBSD:
             # struct bpf_hdr
             bh_tstamp_offset = 8
-
+        else:
+            # struct bpf_hdr (64bit time_t) or struct bpf_xhdr
+            bh_tstamp_offset = 16
         # Parse the BPF header
         bh_caplen = struct.unpack('I', bpf_buffer[bh_tstamp_offset:bh_tstamp_offset + 4])[0]  # noqa: E501
         next_offset = bh_tstamp_offset + 4
@@ -402,7 +384,7 @@ class L3bpfSocket(L2bpfSocket):
             try:
                 fcntl.ioctl(self.outs, BIOCSETIF, struct.pack("16s16x", iff.encode()))  # noqa: E501
             except IOError:
-                raise Scapy_Exception("BIOCSETIF failed on %s" % iff)
+                raise Scapy_Exception(f"BIOCSETIF failed on {iff}")
             self.assigned_interface = iff
 
         # Build the frame
@@ -456,8 +438,8 @@ def bpf_select(fds_list, timeout=None):
        that some frames are read from the internal buffer."""
 
     # Check file descriptors types
-    bpf_scks_buffered = list()
-    select_fds = list()
+    bpf_scks_buffered = []
+    select_fds = []
 
     for tmp_fd in fds_list:
 

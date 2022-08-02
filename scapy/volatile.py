@@ -83,20 +83,18 @@ class RandomEnumeration:
 
 class VolatileValue(object):
     def __repr__(self):
-        return "<%s>" % self.__class__.__name__
+        return f"<{self.__class__.__name__}>"
 
     def _command_args(self):
         return ''
 
     def command(self):
-        return "%s(%s)" % (self.__class__.__name__, self._command_args())
+        return f"{self.__class__.__name__}({self._command_args()})"
 
     def __eq__(self, other):
         x = self._fix()
         y = other._fix() if isinstance(other, VolatileValue) else other
-        if not isinstance(x, type(y)):
-            return False
-        return x == y
+        return x == y if isinstance(x, type(y)) else False
 
     def __ne__(self, other):
         # Python 2.7 compat
@@ -438,7 +436,7 @@ class RandBin(RandString):
             return "size=%r" % self.size
 
         if isinstance(self.size, RandNumExpo) and \
-                self.size.lambd == 0.01 and self.size.base == 0:
+                    self.size.lambd == 0.01 and self.size.base == 0:
             # Default size for RandString, skip
             return ""
         return "size=%r" % self.size.command()
@@ -491,9 +489,7 @@ class RandMAC(RandString):
             self.mac += (v,)
 
     def _command_args(self):
-        if self._template == "*":
-            return ""
-        return "template=%r" % self._template
+        return "" if self._template == "*" else "template=%r" % self._template
 
     def _fix(self):
         return "%02x:%02x:%02x:%02x:%02x:%02x" % self.mac
@@ -518,17 +514,12 @@ class RandIP6(RandString):
                 a = "0"
             if not b:
                 b = "ffff"
-            if a == b:
-                self.sp[i] = int(a, 16)
-            else:
-                self.sp[i] = RandNum(int(a, 16), int(b, 16))
+            self.sp[i] = int(a, 16) if a == b else RandNum(int(a, 16), int(b, 16))
         self.variable = "" in self.sp
         self.multi = self.sp.count("**")
 
     def _command_args(self):
-        if self.tmpl == "**":
-            return ""
-        return "ip6template=%r" % self.tmpl
+        return "" if self.tmpl == "**" else "ip6template=%r" % self.tmpl
 
     def _fix(self):
         nbm = self.multi
@@ -541,16 +532,13 @@ class RandIP6(RandString):
                     remain += 1
                 if nbm or self.variable:
                     remain = random.randint(0, remain)
-                for j in range(remain):
-                    ip.append("%04x" % random.randint(0, 65535))
-            elif isinstance(n, RandNum):
+                ip.extend("%04x" % random.randint(0, 65535) for _ in range(remain))
+            elif isinstance(n, RandNum) or n != 0 and n:
                 ip.append("%04x" % n)
             elif n == 0:
                 ip.append("0")
-            elif not n:
-                ip.append("")
             else:
-                ip.append("%04x" % n)
+                ip.append("")
         if len(ip) == 9:
             ip.remove("")
         if ip[-1] == "":
@@ -579,38 +567,37 @@ class RandOID(RandString):
         if not isinstance(self.depth, VolatileValue):
             ret.append("depth=%r" % self.depth)
         elif not isinstance(self.depth, RandNumExpo) or \
-                self.depth.lambd != 0.1 or self.depth.base != 0:
-            ret.append("depth=%s" % self.depth.command())
+                    self.depth.lambd != 0.1 or self.depth.base != 0:
+            ret.append(f"depth={self.depth.command()}")
 
         if not isinstance(self.idnum, VolatileValue):
             ret.append("idnum=%r" % self.idnum)
         elif not isinstance(self.idnum, RandNumExpo) or \
-                self.idnum.lambd != 0.01 or self.idnum.base != 0:
-            ret.append("idnum=%s" % self.idnum.command())
+                    self.idnum.lambd != 0.01 or self.idnum.base != 0:
+            ret.append(f"idnum={self.idnum.command()}")
 
         return ", ".join(ret)
 
     def __repr__(self):
         if self.ori_fmt is None:
-            return "<%s>" % self.__class__.__name__
+            return f"<{self.__class__.__name__}>"
         else:
-            return "<%s [%s]>" % (self.__class__.__name__, self.ori_fmt)
+            return f"<{self.__class__.__name__} [{self.ori_fmt}]>"
 
     def _fix(self):
         if self.fmt is None:
             return ".".join(str(self.idnum) for _ in range(1 + self.depth))
-        else:
-            oid = []
-            for i in self.fmt:
-                if i == "*":
-                    oid.append(str(self.idnum))
-                elif i == "**":
-                    oid += [str(self.idnum) for i in range(1 + self.depth)]
-                elif isinstance(i, tuple):
-                    oid.append(str(random.randrange(*i)))
-                else:
-                    oid.append(i)
-            return ".".join(oid)
+        oid = []
+        for i in self.fmt:
+            if i == "*":
+                oid.append(str(self.idnum))
+            elif i == "**":
+                oid += [str(self.idnum) for _ in range(1 + self.depth)]
+            elif isinstance(i, tuple):
+                oid.append(str(random.randrange(*i)))
+            else:
+                oid.append(i)
+        return ".".join(oid)
 
 
 class RandRegExp(RandField):
@@ -649,12 +636,9 @@ class RandRegExp(RandField):
             p = s.find("-")
             if p < 0:
                 break
-            if p == 0 or p == len(s) - 1:
+            if p in [0, len(s) - 1]:
                 m = "-"
-                if p:
-                    s = s[:-1]
-                else:
-                    s = s[1:]
+                s = s[:-1] if p else s[1:]
             else:
                 c1 = s[p - 1]
                 c2 = s[p + 1]
@@ -695,12 +679,11 @@ class RandRegExp(RandField):
                     else:
                         r += RandRegExp.stack_fix([e] * mul, index)
                         mul = 1
+            elif mul == 1:
+                r += str(e)
             else:
-                if mul != 1:
-                    r += RandRegExp.stack_fix([e] * mul, index)
-                    mul = 1
-                else:
-                    r += str(e)
+                r += RandRegExp.stack_fix([e] * mul, index)
+                mul = 1
         return r
 
     def _fix(self):
@@ -735,7 +718,7 @@ class RandRegExp(RandField):
                     ch[1].append(current)
                 index.append(current)
                 current = current[0]
-            elif c == '[' or c == '{':
+            elif c in ['[', '{']:
                 current = [current]
                 current[0].append(current)
                 interp = False
@@ -783,9 +766,7 @@ class RandRegExp(RandField):
                     current.pop()
             elif c == '.':
                 current.append(RandChoice(*[chr(x) for x in range(256)]))
-            elif c == '$' or c == '^':
-                pass
-            else:
+            elif c not in ['$', '^']:
                 current.append(c)
 
         return RandRegExp.stack_fix(stack[1:], index)
@@ -1018,8 +999,7 @@ class RandUUID(RandField):
             if node or clock_seq or namespace or name or version:
                 raise ValueError("UUID template must be the only parameter, "
                                  "if specified")
-            tmp = RandUUID._REG.match(template)
-            if tmp:
+            if tmp := RandUUID._REG.match(template):
                 template = tmp.groups()
             else:
                 # Invalid template
@@ -1040,20 +1020,17 @@ class RandUUID(RandField):
             self.uuid_template = tuple(uuid_template)
         else:
             if version:
-                if version not in RandUUID.VERSIONS:
-                    raise ValueError("version is not supported")
-                else:
+                if version in RandUUID.VERSIONS:
                     self.version = version
-            else:
-                # No version specified, try to guess...
-                # This could be wrong, and cause an error later!
-                if node or clock_seq:
-                    self.version = 1
-                elif namespace and name:
-                    self.version = 5
                 else:
-                    # Don't know, random!
-                    self.version = 4
+                    raise ValueError("version is not supported")
+            elif node or clock_seq:
+                self.version = 1
+            elif namespace and name:
+                self.version = 5
+            else:
+                # Don't know, random!
+                self.version = 4
 
             # We have a version, now do things...
             if self.version == 1:
@@ -1064,8 +1041,10 @@ class RandUUID(RandField):
                 self.clock_seq = clock_seq
             elif self.version in (3, 5):
                 if node or clock_seq:
-                    raise ValueError("node and clock_seq may not be used with "
-                                     "version {}".format(self.version))
+                    raise ValueError(
+                        f"node and clock_seq may not be used with version {self.version}"
+                    )
+
 
                 self.namespace = namespace
                 self.name = name
@@ -1203,8 +1182,7 @@ class CorruptedBytes(VolatileValue):
         self.n = n
 
     def _command_args(self):
-        ret = []
-        ret.append("s=%r" % self.s)
+        ret = ["s=%r" % self.s]
         if self.p != 0.01:
             ret.append("p=%r" % self.p)
         if self.n:

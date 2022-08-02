@@ -67,12 +67,11 @@ class ScapyFreqFilter(logging.Filter):
                 tm = ltm
                 nb = 0
             else:
-                if nb < 2:
-                    nb += 1
-                    if nb == 2:
-                        record.msg = "more " + record.msg
-                else:
+                if nb >= 2:
                     return False
+                nb += 1
+                if nb == 2:
+                    record.msg = f"more {record.msg}"
             self.warning_table[caller] = (tm, nb)
         return True
 
